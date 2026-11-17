@@ -24,4 +24,8 @@ export class SitePolicyRepository {
     else database.run('INSERT INTO site_permissions (origin,permission,decision,updated_at) VALUES(?,?,?,?) ON CONFLICT(origin,permission) DO UPDATE SET decision=excluded.decision,updated_at=excluded.updated_at', [origin, permission, decision, Date.now()]);
   }
   release(contextId: string): void { this.privateRules.delete(contextId); }
+  reset(context: BrowserContext, origin: string): void {
+    if (context.isPrivate) this.privateRules.set(context.contextId, this.list(context).filter(rule => rule.origin !== origin));
+    else this.storage.open(context.profileId).run('DELETE FROM site_permissions WHERE origin=?', [origin]);
+  }
 }

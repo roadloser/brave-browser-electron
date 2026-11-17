@@ -1,0 +1,13 @@
+.site-data-page { max-width: 1100px; }
+.site-data-toolbar { display: flex; gap: 12px; margin: 20px 0; }
+.site-data-toolbar input { flex: 1; }
+.site-data-list { display: grid; gap: 8px; padding: 0; list-style: none; }
+.site-data-list button { width: 100%; display: grid; gap: 5px; text-align: left; padding: 14px 16px; overflow-wrap: anywhere; }
+.site-data-list span, .site-data-list small { opacity: .75; }
+.site-cookie-table { overflow-x: auto; }
+.site-cookie-table table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.site-cookie-table th, .site-cookie-table td { padding: 9px; text-align: left; border-bottom: 1px solid var(--border, #d7d7df); overflow-wrap: anywhere; }
+.site-cookie-table small { display: block; opacity: .7; }
+.site-data-dialog fieldset { display: grid; gap: 10px; }
+.site-data-dialog footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+.site-data-dialog ul { max-height: 160px; overflow: auto; overflow-wrap: anywhere; }

@@ -46,6 +46,11 @@ export class PermissionService {
     this.publish(context);
     return this.get(context);
   }
+  resetOrigin(context: BrowserContext, origin: string): void {
+    this.repository.reset(context, origin);
+    for (const [id, entry] of this.pending) if (entry.context.contextId === context.contextId && entry.prompt.origin === origin) this.finish(id, false);
+    this.publish(context);
+  }
 
   async resolve(context: CommandContext, id: string, allow: boolean, remember: boolean): Promise<SiteSettingsState> {
     const entry = this.pending.get(id);
@@ -67,13 +72,13 @@ export class PermissionService {
   }
 
   async clearData(context: CommandContext, input: { origin?: string; cookies: boolean; cache: boolean; localStorage: boolean }) {
-    if (input.origin && input.cache) throw new BrowserError('UNAVAILABLE', '运行时仅支持清空整个资料的 HTTP 缓存；取消缓存选项可仅清除此站点数据');
+    if (input.origin && input.cookies) throw new BrowserError('INVALID_ARGUMENT', 'Cookie 存在共享域与分区范围，请从网站数据页面确认后清理');
     const browserSession = this.runtime.core.sessionForContext(context);
-    const storages: Array<'cookies' | 'localstorage' | 'indexdb' | 'serviceworkers' | 'cachestorage'> = [];
-    if (input.cookies) storages.push('cookies');
-    if (input.localStorage) storages.push('localstorage', 'indexdb', 'serviceworkers', 'cachestorage');
-    if (storages.length) await browserSession.clearStorageData({ origin: input.origin, storages });
-    if (input.cache) await browserSession.clearCache();
+    const dataTypes: Array<'cookies' | 'localStorage' | 'indexedDB' | 'serviceWorkers' | 'fileSystems' | 'backgroundFetch' | 'cache'> = [];
+    if (input.cookies) dataTypes.push('cookies');
+    if (input.localStorage) dataTypes.push('localStorage', 'indexedDB', 'serviceWorkers', 'fileSystems', 'backgroundFetch');
+    if (input.cache) dataTypes.push('cache');
+    if (dataTypes.length) await browserSession.clearData({ origins: input.origin ? [input.origin] : undefined, originMatchingMode: 'origin-in-all-contexts', dataTypes });
     return { cleared: true };
   }
 

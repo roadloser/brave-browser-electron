@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { NavigationCommitted } from '../../shared/contracts/browser-core';
+import type { CoreEvent, NavigationCommitted } from '../../shared/contracts/browser-core';
 import type { FindResult } from '../../shared/contracts/browser-actions';
 import type { TabRecord } from './core-state';
 import { logicalUrl, nativeUrl, normalizeNavigation, isInternalPage } from './internal-pages';
@@ -12,6 +12,7 @@ export class NavigationController {
     private readonly searchEngine: (profileId: string) => string,
     private readonly findResult: (windowId: string, result: FindResult) => void,
     private readonly preparation: NavigationPreparation,
+    private readonly observedFrame: (event: Extract<CoreEvent, { type: 'frameOriginObserved' }>) => void,
   ) {}
 
   bind(tab: TabRecord): () => void {
@@ -44,6 +45,13 @@ export class NavigationController {
     };
     const navigated = (_event: Electron.Event, url: string) => commit(url, false);
     const inPage = (_event: Electron.Event, url: string, isMainFrame: boolean) => { if (isMainFrame) commit(url, true); };
+    const frameNavigated = (_event: Electron.Event, url: string) => {
+      try {
+        const origin = new URL(url);
+        if (!['http:', 'https:'].includes(origin.protocol)) return;
+        this.observedFrame({ type: 'frameOriginObserved', context: { profileId: tab.snapshot.profileId, contextId: tab.snapshot.contextId, isPrivate: tab.snapshot.isPrivate, kind: tab.snapshot.kind }, windowId: tab.snapshot.windowId, tabId: tab.snapshot.id, origin: origin.origin, timestamp: Date.now() });
+      } catch {}
+    };
     const title = (_event: Electron.Event, value: string) => { tab.snapshot.title = value || tab.snapshot.url; update(); };
     const favicon = (_event: Electron.Event, urls: string[]) => { tab.snapshot.faviconUrl = urls.find(url => /^https?:/.test(url)); update(); };
     const failed = (_event: Electron.Event, code: number, description: string, _url: string, isMainFrame: boolean) => {
@@ -61,6 +69,7 @@ export class NavigationController {
     };
     contents.on('did-navigate', navigated);
     contents.on('did-navigate-in-page', inPage);
+    contents.on('did-frame-navigate', frameNavigated);
     contents.on('page-title-updated', title);
     contents.on('page-favicon-updated', favicon);
     contents.on('did-fail-load', failed);
@@ -71,6 +80,7 @@ export class NavigationController {
     return () => {
       contents.removeListener('did-navigate', navigated);
       contents.removeListener('did-navigate-in-page', inPage);
+      contents.removeListener('did-frame-navigate', frameNavigated);
       contents.removeListener('page-title-updated', title);
       contents.removeListener('page-favicon-updated', favicon);
       contents.removeListener('did-fail-load', failed);

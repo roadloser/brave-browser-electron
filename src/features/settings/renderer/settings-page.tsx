@@ -37,6 +37,7 @@ export function SettingsPage() {
       <label><input type="checkbox" checked={values.savePasswords} onChange={event => void update({ savePasswords: event.target.checked })}/>允许保存密码</label>
       <label><input type="checkbox" checked={values.autofillEnabled} onChange={event => void update({ autofillEnabled: event.target.checked })}/>允许密码填充</label>
       <label><input type="checkbox" checked={values.doNotTrack} onChange={event => void update({ doNotTrack: event.target.checked })}/>发送“请勿跟踪”请求</label>
+      <button onClick={() => void browserClient.command('browser.openTab', { url: 'brave://site-data' }).catch(reason => setError(reason instanceof Error ? reason.message : '无法打开站点数据'))}>管理站点数据与权限</button>
     </fieldset>
     <button disabled={busy} onClick={() => { if (window.confirm('恢复此资料的默认设置？')) void browserClient.command('settings.reset', {}).then(setState).catch(reason => setError(String(reason))); }}>恢复默认设置</button>
   </section>;

@@ -8,6 +8,7 @@ import { createEventPublisher } from '../ipc/event-publisher';
 import { mapError } from '../ipc/error-mapper';
 import { PageScriptHost } from '../platform/runtime/page-script-host';
 import { DebuggerHost } from '../platform/runtime/debugger-host';
+import { UserAgentHost } from '../platform/runtime/user-agent/user-agent-host';
 import { ContextNetwork } from '../platform/network/context-network';
 import { SecretStore } from '../platform/credentials/secret-store';
 import { NetworkPolicyCoordinator } from '../platform/network/request-policy';
@@ -27,6 +28,7 @@ export class AppRuntime {
   private router?: IpcRouter;
   private pages?: PageScriptHost;
   private debuggerHost?: DebuggerHost;
+  private userAgent?: UserAgentHost;
   private features: FeatureRegistration[] = [];
   private subscriptions: Dispose[] = [];
   private disposed = false;
@@ -67,9 +69,12 @@ export class AppRuntime {
     const policies = new NetworkPolicyCoordinator();
     const debuggerHost = new DebuggerHost(core);
     this.debuggerHost = debuggerHost;
+    const userAgent = new UserAgentHost();
+    this.userAgent = userAgent;
     const runtime: FeatureRuntime = {
       core, storage, router, publish, pages, syncData: new SyncDataCoordinator(),
       debugger: debuggerHost,
+      userAgent,
       network: new ContextNetwork(core),
       historyRead: new HistoryReadCoordinator(),
       syncTabs: {
@@ -119,6 +124,7 @@ export class AppRuntime {
     }
     this.subscriptions = [];
     try { this.pages?.dispose(); } catch (error) { errors.push(error); }
+    try { this.userAgent?.dispose(); } catch (error) { errors.push(error); }
     try { this.debuggerHost?.dispose(); } catch (error) { errors.push(error); }
     try { await this.core?.dispose(); } catch (error) { errors.push(error); }
     try { this.router?.dispose(); } catch (error) { errors.push(error); }

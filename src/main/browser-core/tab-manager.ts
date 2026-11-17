@@ -17,6 +17,7 @@ export class TabManager {
     private readonly navigation: NavigationController,
     private readonly changed: (window: WindowRecord) => void,
     private readonly popup: (windowId: string, url: string) => void,
+    private readonly observePageActions: (tabId: string) => () => void,
   ) {}
 
   async create(window: WindowRecord, options: { url?: string; active?: boolean; pinned?: boolean }, saved?: SavedTab): Promise<TabSnapshot> {
@@ -41,6 +42,9 @@ export class TabManager {
     view.webContents.setAudioMuted(snapshot.muted);
     if (window.context.kind === 'tor') view.webContents.setWebRTCIPHandlingPolicy('disable_non_proxied_udp');
     tab.disposeEvents = this.navigation.bind(tab);
+    const disposeNavigation = tab.disposeEvents;
+    const disposeActions = this.observePageActions(snapshot.id);
+    tab.disposeEvents = () => { disposeActions(); disposeNavigation(); };
     view.webContents.setWindowOpenHandler(details => {
       if (/^https?:/i.test(details.url)) this.popup(window.id, details.url);
       return { action: 'deny' };

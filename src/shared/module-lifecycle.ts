@@ -4,6 +4,7 @@ import type { BrowserCorePort, DebuggerHostPort, Migration, PageScriptPort, Requ
 import type { SyncDataPort, SyncTabsPort } from './sync-data-ports';
 import type { ContextNetworkPort } from './network-ports';
 import type { HistoryReadPort } from './history-read-port';
+import type { UserAgentPort } from './user-agent-port';
 
 export type CommandContext = BrowserContext & { windowId: string; requestId: string };
 export interface CommandRouter {
@@ -21,6 +22,7 @@ export interface FeatureRuntime {
   syncTabs: SyncTabsPort;
   pages: PageScriptPort;
   debugger: DebuggerHostPort;
+  userAgent: UserAgentPort;
   network: ContextNetworkPort;
   historyRead: HistoryReadPort;
   secrets: SecretStorePort;

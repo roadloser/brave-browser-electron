@@ -19,6 +19,7 @@ const privacyCommands = new Set([
   'Storage.getStorageKey', 'Storage.getStorageKeyForFrame',
   'Debugger.enable', 'Debugger.disable', 'Debugger.evaluateOnCallFrame', 'Debugger.resume',
   'Runtime.callFunctionOn', 'Runtime.releaseObject',
+  'Emulation.setUserAgentOverride',
 ]);
 
 export class DebuggerHost implements DebuggerHostPort {
