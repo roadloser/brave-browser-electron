@@ -1,9 +1,10 @@
+import type { ReactNode } from 'react';
 import type { BookmarkNode } from '../../../shared/contracts/bookmarks';
 
 type Props = { nodes: BookmarkNode[]; selectedId: string; onSelect: (id: string) => void };
 
 export function BookmarkFolderTree({ nodes, selectedId, onSelect }: Props) {
-  function children(parentId: string | null, depth: number): React.ReactNode {
+  function children(parentId: string | null, depth: number): ReactNode {
     return nodes.filter(node => node.kind === 'folder' && node.parentId === parentId)
       .sort((left, right) => left.position - right.position)
       .map(folder => <div key={folder.id}>
