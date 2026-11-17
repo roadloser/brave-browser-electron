@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from 'react';
+import { browserClient } from '../client/browser-client';
 
 type BoundaryState = { failed: boolean };
 
@@ -7,6 +8,10 @@ export class AppErrorBoundary extends Component<{ children: ReactNode }, Boundar
 
   static getDerivedStateFromError(): BoundaryState {
     return { failed: true };
+  }
+
+  componentDidCatch() {
+    void browserClient.command('browser.setLayout', { contentVisible: false }).catch(() => undefined);
   }
 
   render() {
