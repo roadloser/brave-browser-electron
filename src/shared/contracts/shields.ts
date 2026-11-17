@@ -20,6 +20,7 @@ export const shieldsCommandSchemas = {
   'shields.resetPolicy': z.object({ origin: originSchema }),
   'shields.rules': z.object({}),
   'shields.updateRules': z.object({}),
+  'shields.cancelUpdate': z.object({}),
   'shields.rollbackRules': z.object({}),
 };
 export interface ShieldsCommandResults {
@@ -28,5 +29,6 @@ export interface ShieldsCommandResults {
   'shields.resetPolicy': ShieldsState[];
   'shields.rules': ShieldRuleState;
   'shields.updateRules': ShieldRuleState;
+  'shields.cancelUpdate': ShieldRuleState;
   'shields.rollbackRules': ShieldRuleState;
 }

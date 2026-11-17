@@ -14,6 +14,7 @@ import { extensionsCommandSchemas, type ExtensionsCommandResults, type Extension
 import { shieldsCommandSchemas, type ShieldsCommandResults, type ShieldsState, type ShieldRuleState } from './shields';
 import { syncCommandSchemas, type SyncCommandResults, type SyncState } from './sync';
 import { privacyCommandSchemas, type PrivacyCommandResults, type PrivacyState } from './fingerprint-privacy';
+import { contentServicesCommandSchemas, type ContentServicesCommandResults, type NewsState } from './content-services';
 import type { WireError } from '../errors';
 
 export const WIRE_VERSION = 1;
@@ -27,6 +28,7 @@ export const commandSchemas = {
   ...leoCommandSchemas, ...extensionsCommandSchemas, ...shieldsCommandSchemas,
   ...syncCommandSchemas,
   ...privacyCommandSchemas,
+  ...contentServicesCommandSchemas,
 };
 export type CommandName = keyof typeof commandSchemas;
 export type CommandInput<Name extends CommandName> = z.input<(typeof commandSchemas)[Name]>;
@@ -34,7 +36,8 @@ export type CommandPayload<Name extends CommandName> = z.output<(typeof commandS
 export type CommandResults = BrowserCommandResults & TabGroupCommandResults & BookmarkCommandResults & HistoryCommandResults
   & SettingsCommandResults & DownloadsCommandResults & SiteSettingsCommandResults
   & CredentialsCommandResults & PageToolsCommandResults & NewTabCommandResults
-  & LeoCommandResults & ExtensionsCommandResults & ShieldsCommandResults & SyncCommandResults & PrivacyCommandResults;
+  & LeoCommandResults & ExtensionsCommandResults & ShieldsCommandResults & SyncCommandResults & PrivacyCommandResults
+  & ContentServicesCommandResults;
 export type CommandEnvelope = {
   version: typeof WIRE_VERSION; requestId: string; command: CommandName; payload: unknown;
 };
@@ -57,6 +60,7 @@ export interface BrowserEvents {
   'shields.rulesChanged': ShieldRuleState;
   'sync.changed': SyncState;
   'privacy.changed': PrivacyState;
+  'news.changed': NewsState;
   'app.error': WireError;
 }
 export type EventName = keyof BrowserEvents;

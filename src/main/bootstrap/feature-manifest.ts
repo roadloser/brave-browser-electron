@@ -9,6 +9,7 @@ import { credentialsFeature } from '../../features/credentials/main';
 import { newTabFeature } from '../../features/new-tab/main';
 import { pageToolsFeature } from '../../features/page-tools/main';
 import { extensionsFeature } from '../../features/extensions/main';
+import { leoFeature } from '../../features/leo/main';
 
 export const featureManifest: readonly FeatureDefinition[] = [
   settingsFeature,
@@ -21,4 +22,5 @@ export const featureManifest: readonly FeatureDefinition[] = [
   newTabFeature,
   pageToolsFeature,
   extensionsFeature,
+  leoFeature,
 ];

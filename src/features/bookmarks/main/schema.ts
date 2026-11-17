@@ -2,7 +2,8 @@ import type { Migration } from '../../../shared/runtime-ports';
 
 export const BOOKMARK_BAR_ID = 'bookmarks-bar';
 export const OTHER_BOOKMARKS_ID = 'other-bookmarks';
-export const BOOKMARK_ROOT_IDS = new Set([BOOKMARK_BAR_ID, OTHER_BOOKMARKS_ID]);
+export const MOBILE_BOOKMARKS_ID = 'mobile-bookmarks';
+export const BOOKMARK_ROOT_IDS = new Set([BOOKMARK_BAR_ID, OTHER_BOOKMARKS_ID, MOBILE_BOOKMARKS_ID]);
 
 export const bookmarkMigrations: readonly Migration[] = [{
   id: 'bookmarks.initial',
@@ -32,6 +33,16 @@ export const bookmarkMigrations: readonly Migration[] = [{
     database.run(
       'INSERT INTO bookmarks (id,parent_id,kind,title,url,position,created_at,updated_at) VALUES (?,NULL,?,?,NULL,?,?,?)',
       [OTHER_BOOKMARKS_ID, 'folder', '其他书签', 1, timestamp, timestamp],
+    );
+  },
+}, {
+  id: 'bookmarks.mobile-root',
+  version: 1,
+  up(database) {
+    const timestamp = Date.now();
+    database.run(
+      'INSERT OR IGNORE INTO bookmarks(id,parent_id,kind,title,url,position,created_at,updated_at) VALUES(?,NULL,?,?,NULL,?,?,?)',
+      [MOBILE_BOOKMARKS_ID, 'folder', '移动设备书签', 2, timestamp, timestamp],
     );
   },
 }];

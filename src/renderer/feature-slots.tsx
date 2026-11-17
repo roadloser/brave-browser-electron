@@ -7,6 +7,7 @@ import { SitePermissionButton } from '../features/site-settings/renderer/site-pe
 import { CredentialsButton } from '../features/credentials/renderer/credentials-button';
 import { PageToolsToolbar } from '../features/page-tools/renderer/page-tools-toolbar';
 import { ExtensionActions } from '../features/extensions/renderer/extension-actions';
+import { LeoButton } from '../features/leo/renderer/leo-button';
 
 function useActiveTab() {
   const snapshot = useBrowserStore(state => state.snapshot);
@@ -22,6 +23,7 @@ export function FeatureToolbar() {
     <CredentialsButton tab={tab} />
     <PageToolsToolbar tab={tab} />
     {tab && <ExtensionActions tab={tab} />}
+    <LeoButton tab={tab} />
   </>;
 }
 

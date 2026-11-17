@@ -43,6 +43,10 @@ export class RuleUpdater {
       for (const source of ruleSources) lists.push(await this.fetch(source, controller.signal));
       const resources = await this.fetch(resourceSource, controller.signal);
       const version = hash([...lists.map(list => list.sha256), resources.sha256].join(':'));
+      if (version === this.repository.versions().current && this.engine.active) {
+        this.status = 'ready';
+        return this.state();
+      }
       const bundle: RuleBundle = { version, createdAt: Date.now(), lists, resources };
       const candidate = this.engine.prepare(bundle);
       try {
@@ -72,6 +76,11 @@ export class RuleUpdater {
   }
 
   dispose(): void { this.controller?.abort(); }
+
+  cancel(): ShieldRuleState {
+    this.controller?.abort();
+    return this.state();
+  }
 
   private async fetch(source: { id: string; url: string }, signal: AbortSignal): Promise<RuleText> {
     const response = await fetch(source.url, { signal, redirect: 'error', headers: { Accept: 'text/plain, application/json' } });
