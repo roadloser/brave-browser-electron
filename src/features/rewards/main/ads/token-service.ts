@@ -88,6 +88,7 @@ export class AdsTokenService {
       seed?.fill(0); clearTimeout(timeout); this.running.delete(profileId);
       if (!this.disposed) this.notify(profileId);
     }
+    if (this.disposed) throw new BrowserError('CANCELLED', '广告token服务已关闭');
     return this.notify(profileId);
   }
 

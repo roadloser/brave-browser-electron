@@ -4,6 +4,7 @@ import type { WalletRequest } from '../../../shared/contracts/wallet';
 import { BrowserError } from '../../../shared/errors';
 import type { WalletStateStore } from './wallet-state';
 import type { ChainRegistry } from './chain-registry';
+import { parseTypedData, signEthereumTypedData } from './chains/ethereum-typed-data';
 
 export class TransactionController {
   private readonly validators = new Map<string, () => boolean>();
@@ -46,7 +47,7 @@ export class TransactionController {
     const request = session.document.requests.find((entry) => entry.id === id);
     if (!request || request.status !== 'pending') throw new BrowserError('CONFLICT', '请求已处理或不存在');
     const account = session.document.accounts.find((entry) => entry.id === request.accountId);
-    const network = session.document.networks.find((entry) => entry.id === request.networkId);
+    const network = session.document.pending[id]?.targetNetwork ?? session.document.networks.find((entry) => entry.id === request.networkId);
     const pending = session.document.pending[id];
     if (!account || !network || !pending) throw new BrowserError('NOT_FOUND', '交易上下文已失效');
     if (!session.keyring.unlocked) throw new BrowserError('FORBIDDEN', '请先解锁钱包再确认');
@@ -55,7 +56,15 @@ export class TransactionController {
     let knownHash: string | undefined;
     try {
       let result: string;
-      if (request.kind === 'connect') {
+      if (request.kind === 'network') {
+        this.store.update(context, (document) => {
+          if (!document.networks.some((entry) => entry.id === network.id)) document.networks.push(network);
+          const current = document.accounts.find((entry) => entry.id === account.id)!;
+          current.networkId = network.id;
+          document.selectedAccountId = current.id;
+        });
+        result = network.chainId!;
+      } else if (request.kind === 'connect') {
         this.store.update(context, (document) => {
           if (request.origin) document.grants[request.origin] = [...new Set([...(document.grants[request.origin] ?? []), account.id])];
         });
@@ -63,6 +72,7 @@ export class TransactionController {
       } else if (request.kind === 'message') {
         const adapter = this.chains.get(account.chain);
         result = await session.keyring.use((mnemonic) => {
+          if (pending.typedData) return signEthereumTypedData({ mnemonic, index: account.index }, pending.typedData);
           if (pending.messageBase64) {
             if (!adapter.signBytes) throw new BrowserError('UNAVAILABLE', '此链不支持原始字节消息签名');
             return adapter.signBytes({ mnemonic, index: account.index }, network, Buffer.from(pending.messageBase64, 'base64'));
@@ -151,6 +161,21 @@ export class TransactionController {
     this.publish(context); return id;
   }
   bindSource(id: string, validator: () => boolean) { this.validators.set(id, validator); }
+  typedData(context: CommandContext, accountId: string, input: unknown, source: { origin: string; tabId: string }) {
+    const session = this.store.get(context);
+    const account = session.document.accounts.find((entry) => entry.id === accountId);
+    if (!account || account.chain !== 'ethereum') throw new BrowserError('FORBIDDEN', '此账户不支持EIP-712签名');
+    const network = session.document.networks.find((entry) => entry.id === account.networkId)!;
+    const data = parseTypedData(input, network);
+    const id = randomUUID();
+    this.store.update(context, (document) => {
+      document.requests.push({ id, kind: 'message', accountId, networkId: network.id, ...source, summary: '签署结构化消息（EIP-712）',
+        details: { domain: JSON.stringify(data.domain, null, 2), primaryType: data.primaryType, message: JSON.stringify(data.message, null, 2), types: JSON.stringify(data.types, null, 2) },
+        status: 'pending', createdAt: Date.now() });
+      document.pending[id] = { typedData: data };
+    });
+    this.publish(context); return id;
+  }
   async dapp(context: CommandContext, accountId: string, payload: unknown, source?: { origin: string; tabId: string }, signOnly = false) {
     const session = this.store.get(context);
     const account = session.document.accounts.find((entry) => entry.id === accountId);

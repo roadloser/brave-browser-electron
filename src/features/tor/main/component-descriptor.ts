@@ -1,5 +1,5 @@
 import { createReadStream } from 'node:fs';
-import { access, readFile, realpath, stat } from 'node:fs/promises';
+import { access, readFile, realpath, stat, readdir } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { isAbsolute, join, relative, sep } from 'node:path';
@@ -26,9 +26,22 @@ export async function readTorComponent(directory: string): Promise<TorComponent>
   }
   if (!descriptor.files[descriptor.executable]) throw new BrowserError('INVALID_ARGUMENT', '组件清单没有包含可执行文件校验值');
   if (Object.keys(descriptor.files).length > 256) throw new BrowserError('INVALID_ARGUMENT', 'Tor 组件清单文件数量超过限制');
+  const pending = [''];
+  let total = 0;
+  while (pending.length) {
+    const directory = pending.pop()!;
+    for (const entry of await readdir(join(root, directory), { withFileTypes: true })) {
+      const name = directory ? directory + '/' + entry.name : entry.name;
+      if (name === 'tor-component.json' || entry.name === '.DS_Store') continue;
+      if (entry.isDirectory()) { pending.push(name); continue; }
+      total += 1;
+      if (total > 256 || !descriptor.files[name]) throw new BrowserError('INVALID_ARGUMENT', '组件目录含未登记文件：' + name);
+    }
+  }
   for (const [file, expected] of Object.entries(descriptor.files)) {
     const path = await componentFile(root, file);
-    if (!(await stat(path)).isFile()) throw new BrowserError('INVALID_ARGUMENT', '组件清单只能登记普通文件');
+    const metadata = await stat(path);
+    if (!metadata.isFile() || metadata.size > 256 * 1024 * 1024) throw new BrowserError('INVALID_ARGUMENT', '组件清单文件不是普通文件或超过256MB限制');
     if (await fileHash(path) !== expected.toLowerCase()) throw new BrowserError('CONFLICT', 'Tor 组件完整性不匹配：' + file);
   }
   for (const path of [descriptor.geoIpFile, descriptor.geoIpv6File]) if (path && !descriptor.files[path]) throw new BrowserError('INVALID_ARGUMENT', 'GeoIP 文件必须包含在完整性清单中');

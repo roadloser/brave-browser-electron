@@ -8,11 +8,13 @@ import { VaultCommands } from './vault-commands';
 import { TransactionController } from './transaction-controller';
 import { formatAmount, safeNetworkUrl } from './chains/network-client';
 import { AccountDiscovery } from './account-discovery';
+import { NetworkRequests } from './network-requests';
 
 export class WalletService {
   readonly chains = new ChainRegistry();
   readonly store: WalletStateStore;
   readonly transactions: TransactionController;
+  readonly networks: NetworkRequests;
   private readonly discovery: AccountDiscovery;
   private readonly vault: VaultCommands;
   private readonly release: () => void;
@@ -24,6 +26,7 @@ export class WalletService {
     this.vault = new VaultCommands(runtime, this.store);
     this.discovery = new AccountDiscovery(this.store, this.chains, (context) => this.publish(context));
     this.transactions = new TransactionController(this.store, this.chains, (context) => this.publish(context), (context, accountId) => this.discovery.refresh(context, accountId));
+    this.networks = new NetworkRequests(this.store, (context) => this.publish(context));
     this.release = runtime.core.onEvent((event) => {
       if (event.type === 'contextDisposed') {
         const context: CommandContext = { ...event.context, windowId: '', requestId: '' };

@@ -2,12 +2,13 @@ import type { WalletAccount, WalletNetwork, WalletRequest, WalletTransaction } f
 import type { Migration, ProfileDatabase } from '../../../shared/runtime-ports';
 import type { PreparedTransfer } from './chains/adapter';
 import type { BitcoinPublicAccount } from './chains/bitcoin-discovery';
+import type { EthereumTypedData } from './chains/ethereum-typed-data';
 
 export type VaultRecord = { version: 1; salt: string; iv: string; tag: string; ciphertext: string };
 export type WalletDocument = {
   vault?: VaultRecord; accounts: WalletAccount[]; networks: WalletNetwork[]; selectedAccountId?: string;
   requests: WalletRequest[]; transactions: WalletTransaction[]; grants: Record<string, string[]>;
-  pending: Record<string, { prepared?: PreparedTransfer; message?: string; messageBase64?: string; providerMethod?: string; providerPayload?: unknown }>;
+  pending: Record<string, { prepared?: PreparedTransfer; message?: string; messageBase64?: string; providerMethod?: string; providerPayload?: unknown; typedData?: EthereumTypedData; targetNetwork?: WalletNetwork }>;
   revision: number;
   bitcoinAccounts: Record<string, BitcoinPublicAccount>;
 };

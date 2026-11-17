@@ -58,21 +58,21 @@ export class PrivacyService {
     return this.state(context, tab?.url, tab?.id);
   }
 
-  setDefault(context: CommandContext, mode: PrivacyMode): PrivacyState {
+  async setDefault(context: CommandContext, mode: PrivacyMode): Promise<PrivacyState> {
     if (context.isPrivate) this.privateState(context.contextId).defaultMode = mode;
     else this.repository(context.profileId).setDefault(mode);
-    this.changed(context);
+    await this.changed(context);
     return this.state(context);
   }
 
-  setSite(context: CommandContext, origin: string, mode: PrivacyMode | null): PrivacyState {
+  async setSite(context: CommandContext, origin: string, mode: PrivacyMode | null): Promise<PrivacyState> {
     const site = resolvePrivacySite(origin);
     if (!site) throw new BrowserError('INVALID_ARGUMENT', '指纹策略仅支持http(s)站点');
     if (context.isPrivate) {
       const settings = this.privateState(context.contextId);
       if (mode === null) settings.sites.delete(site); else settings.sites.set(site, mode);
     } else this.repository(context.profileId).setSite(site, mode);
-    this.changed(context, site);
+    await this.changed(context, site);
     return this.state(context, origin);
   }
 
@@ -142,7 +142,7 @@ export class PrivacyService {
     for (const [tabId, tab] of this.tabs) if (windowIds.has(tab.windowId)) this.tabs.delete(tabId);
     for (const window of state.windows) for (const tab of window.tabs) this.tabs.set(tab.id, tab);
   }
-  private changed(context: CommandContext, site?: string): void {
+  private async changed(context: CommandContext, site?: string): Promise<void> {
     this.revision++;
     for (const tab of this.tabs.values()) {
       if (tab.profileId !== context.profileId || (context.isPrivate && tab.contextId !== context.contextId)) continue;
@@ -150,7 +150,7 @@ export class PrivacyService {
       this.runtime.publish('privacy.changed', this.state(tab, tab.url, tab.id), { windowId: tab.windowId });
       if (this.cdpContexts.has(tab.id) && this.effectiveMode(tab, resolvePrivacySite(tab.url) ?? '') === 'off') {
         this.cdpContexts.get(tab.id)?.dispose(); this.cdpContexts.delete(tab.id);
-      } else if (!this.cdpContexts.has(tab.id)) void this.prepareContext(tab);
+      } else if (!this.cdpContexts.has(tab.id)) await this.prepareContext(tab);
       this.runtime.core.reload(tab.id);
     }
   }
@@ -179,6 +179,7 @@ export class PrivacyService {
       outcomes.set('iframe', { applied: false, reason: error instanceof Error ? error.message : 'CDP准备失败' });
       this.cdpOutcomes.set(tab.id, outcomes);
       this.runtime.publish('privacy.changed', this.state(tab, tab.url, tab.id), { windowId: tab.windowId });
+      throw error;
     }
   }
 }

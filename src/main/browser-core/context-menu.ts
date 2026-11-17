@@ -9,7 +9,10 @@ export function attachPageContextMenu(runtime: FeatureRuntime, tabId: string): (
     if (details.linkURL && /^https?:/i.test(details.linkURL)) {
       items.push(
         { label: '在新标签页中打开链接', click: () => { void runtime.core.openTab({ windowId: tab.windowId, url: details.linkURL, active: false }); } },
-        { label: '在新窗口中打开链接', click: () => { void runtime.core.openWindow({ profileId: tab.profileId, isPrivate: tab.isPrivate }).then(window => runtime.core.navigate(window.activeTabId!, details.linkURL)); } },
+        { label: '在新窗口中打开链接', click: () => {
+          const opened = tab.kind === 'tor' ? runtime.core.openTorWindow(tab.profileId, async () => undefined) : runtime.core.openWindow({ profileId: tab.profileId, isPrivate: tab.isPrivate });
+          void opened.then(window => runtime.core.navigate(window.activeTabId!, details.linkURL));
+        } },
         { label: '复制链接地址', click: () => clipboard.writeText(details.linkURL) },
         { type: 'separator' },
       );

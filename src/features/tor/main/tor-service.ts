@@ -8,10 +8,12 @@ import { readTorComponent } from './component-descriptor';
 import { TorProcessAdapter } from './tor-process-adapter';
 import { TorProxySession } from './proxy-session';
 import type { TorRuntimePort } from './runtime-port';
+import { TorConnectionMonitor } from './connection-monitor';
 
 type Connection = {
   runtime: TorRuntimePort; proxy: TorProxySession; controller: AbortController;
   operation?: Promise<TorState>; stopping: boolean; replacing: boolean;
+  monitor?: TorConnectionMonitor;
 };
 
 export class TorService {
@@ -86,7 +88,14 @@ export class TorService {
   async newIdentity(context: CommandContext): Promise<TorState> {
     const connection = this.connections.get(context.profileId);
     if (!connection || connection.operation || this.get(context.profileId).phase !== 'connected') throw new BrowserError('CONFLICT', 'Tor 尚未连接或正在处理其他操作');
+    const operation = this.replaceIdentity(context, connection);
+    connection.operation = operation;
+    void operation.finally(() => { connection.operation = undefined; }).catch(() => undefined);
+    return operation;
+  }
+  private async replaceIdentity(context: CommandContext, connection: Connection): Promise<TorState> {
     connection.replacing = true;
+    connection.monitor?.dispose();
     try {
       this.update(context.profileId, { phase: 'starting', summary: '正在关闭旧 Tor 上下文并更换身份' });
       await connection.proxy.block();
@@ -101,9 +110,12 @@ export class TorService {
       if (endpoint) throw new BrowserError('CONFLICT', '旧 Tor 上下文尚未释放');
       const socksPort = this.socksPorts.get(context.profileId);
       if (!socksPort) throw new BrowserError('UNAVAILABLE', 'Tor SOCKS 端点已失效');
+      connection.controller.signal.throwIfAborted();
       await this.runtime.core.openTorWindow(context.profileId, (nextContext, browserSession) => connection.proxy.prepare(nextContext, browserSession, socksPort));
+      connection.controller.signal.throwIfAborted();
       connection.proxy.connected();
       this.update(context.profileId, { phase: 'connected', summary: '新的 Tor 上下文已连接', bootstrapProgress: 100, contextId: connection.proxy.contextId(), error: undefined });
+      this.monitor(context.profileId, connection);
     } catch (error) { await this.fail(context.profileId, error instanceof Error ? error.message : '更换 Tor 身份失败'); }
     finally { connection.replacing = false; }
     return this.get(context.profileId);
@@ -142,6 +154,7 @@ export class TorService {
         if (bootstrap.progress === 100 && bootstrap.circuitEstablished) {
           connection.proxy.connected();
           this.update(profileId, { phase: 'connected', summary: 'Tor 已连接 · 上下文级隔离' });
+          this.monitor(profileId, connection);
           return this.get(profileId);
         }
         await delay(750, undefined, { signal: connection.controller.signal });
@@ -156,6 +169,7 @@ export class TorService {
     const connection = this.connections.get(profileId);
     if (!connection || connection.stopping) return;
     connection.stopping = true; connection.controller.abort();
+    connection.monitor?.dispose();
     this.update(profileId, { phase: 'stopping', summary: '正在关闭 Tor 连接' });
     await connection.proxy.block();
     await connection.operation?.catch(() => undefined);
@@ -170,6 +184,7 @@ export class TorService {
     if (connection?.stopping) return;
     if (connection) {
       connection.stopping = true; connection.controller.abort();
+      connection.monitor?.dispose();
       await connection.proxy.block();
       const contextId = connection.proxy.contextId();
       if (contextId) {
@@ -185,6 +200,20 @@ export class TorService {
     const next = { ...previous, ...patch, revision: previous.revision + 1 };
     this.states.set(profileId, next);
     this.runtime.publish('tor.changed', next, { profileId, includePrivate: true });
+  }
+  private monitor(profileId: string, connection: Connection): void {
+    connection.monitor?.dispose();
+    connection.monitor = new TorConnectionMonitor(connection.runtime, async status => {
+      if (connection.stopping || connection.replacing) return;
+      if (!status.circuitEstablished) {
+        await connection.proxy.block();
+        this.update(profileId, { phase: 'bootstrapping', bootstrapProgress: status.progress, summary: 'Tor 线路不可用，网页网络已暂停' });
+      } else if (this.get(profileId).phase !== 'connected') {
+        connection.proxy.connected();
+        this.update(profileId, { phase: 'connected', bootstrapProgress: 100, summary: 'Tor 线路已恢复' });
+      }
+    }, reason => this.fail(profileId, reason));
+    connection.monitor.start();
   }
   private assertStopped(profileId: string): void {
     if (this.connections.has(profileId)) throw new BrowserError('CONFLICT', '请先关闭当前 Tor 连接');

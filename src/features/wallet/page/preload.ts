@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import { announceEthereumProvider } from './ethereum-discovery';
 
 if (/^https?:$/.test(location.protocol)) {
   const listeners = new Map<string, Set<(value: unknown) => void>>();
@@ -30,6 +31,7 @@ if (/^https?:$/.test(location.protocol)) {
     removeListener,
     request: (input: { method: string; params?: unknown[] }) => request('ethereum', input.method, input.params),
   });
+  announceEthereumProvider();
   contextBridge.exposeInMainWorld('braveSolana', {
     isBraveWallet: true,
     connect: () => request('solana', 'connect'),

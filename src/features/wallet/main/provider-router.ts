@@ -61,7 +61,7 @@ export class ProviderRouter {
         return { ok: true, value };
       } catch (error) {
         const problem = error instanceof BrowserError ? error : new BrowserError('INVALID_ARGUMENT', '钱包请求无效或无法处理');
-        const code = problem.code === 'CANCELLED' ? 4001 : problem.code === 'FORBIDDEN' ? 4100 : problem.code === 'UNAVAILABLE' ? 4200 : -32603;
+        const code = Number(problem.details?.providerCode) || (problem.code === 'CANCELLED' ? 4001 : problem.code === 'FORBIDDEN' ? 4100 : problem.code === 'UNAVAILABLE' ? 4200 : -32603);
         return { ok: false, error: { code, message: problem.message } };
       }
     });
@@ -128,6 +128,19 @@ export class ProviderRouter {
     }
     if (!allowed.includes(account.id)) throw new BrowserError('FORBIDDEN', '请先允许站点访问此账户');
     if (input.method === 'disconnect') { this.wallet.revokeSite(context, origin); return null; }
+    if (input.chain === 'ethereum' && ['eth_signTypedData', 'eth_signTypedData_v3', 'eth_signTypedData_v4'].includes(input.method)) {
+      if (typeof input.params[0] !== 'string' || input.params[0].toLowerCase() !== account.address.toLowerCase()) throw new BrowserError('FORBIDDEN', '签名账户与授权不一致');
+      const id = this.wallet.transactions.typedData(context, account.id, input.params[1], source);
+      this.wallet.transactions.bindSource(id, () => sourceIsCurrent() && Boolean(this.wallet.store.get(context).document.grants[origin]?.includes(account.id)));
+      return this.wallet.waitForApproval(context, id);
+    }
+    if (input.chain === 'ethereum' && ['wallet_switchEthereumChain', 'wallet_addEthereumChain'].includes(input.method)) {
+      const id = input.method === 'wallet_addEthereumChain' ? await this.wallet.networks.add(context, account.id, source, input.params[0]) :
+        this.wallet.networks.switch(context, account.id, source, z.object({ chainId: z.string().regex(/^0x[0-9a-f]+$/i) }).parse(input.params[0]).chainId);
+      this.wallet.transactions.bindSource(id, () => sourceIsCurrent() && Boolean(this.wallet.store.get(context).document.grants[origin]?.includes(account.id)));
+      await this.wallet.waitForApproval(context, id);
+      return null;
+    }
     if (input.method === 'personal_sign' || (input.chain === 'solana' && input.method === 'signMessage')) {
       let message: Uint8Array;
       if (input.chain === 'ethereum') {
