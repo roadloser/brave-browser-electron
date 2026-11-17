@@ -6,9 +6,10 @@ import { adsTokenMigrations } from './ads/token-repository';
 import { adsDeliveryMigrations } from './ads/delivery-repository';
 import { externalAccountMigrations } from './providers/external-repository';
 import { adReactionMigrations } from './ads/reaction-repository';
+import { captchaMigrations } from './ads/captcha-service';
 
 export const rewardsFeature: FeatureDefinition = {
-  id: 'rewards', migrations: [...rewardsMigrations, ...adsTokenMigrations, ...adsDeliveryMigrations, ...externalAccountMigrations, ...adReactionMigrations],
+  id: 'rewards', migrations: [...rewardsMigrations, ...adsTokenMigrations, ...adsDeliveryMigrations, ...externalAccountMigrations, ...adReactionMigrations, ...captchaMigrations],
   register(runtime) {
     const service = new RewardsService(runtime);
     const stopCommands = registerRewardsIpc(runtime, service);

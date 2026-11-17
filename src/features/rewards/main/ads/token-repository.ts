@@ -4,7 +4,7 @@ import type { BlindedTokenBatch } from './crypto-port';
 export type AdsTokenConfiguration = { endpoint: string; issuerPublicKeys: string[] };
 export type PendingTokenBatch = {
   id: string; batchCipher: string; nonce: string | null; status: 'requesting' | 'awaiting-signature' | 'failed';
-  error?: string; createdAt: number;
+  error?: string; createdAt: number; captchaId?: string;
 };
 export type StoredConfirmationToken = { id: string; tokenCipher: string; publicKey: string; consumed: boolean };
 export const adsTokenMigrations: readonly Migration[] = [{

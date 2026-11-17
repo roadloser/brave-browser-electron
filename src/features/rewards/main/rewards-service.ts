@@ -16,6 +16,7 @@ import { AdsDeliveryService } from './ads/delivery-service';
 import { withDeliveryCapabilities } from './ads/delivery-capabilities';
 import { contextRewardsFetch } from './rewards-network';
 import { ExternalAccountController } from './providers/external-controller';
+import { RewardsCaptchaService } from './ads/captcha-service';
 
 export class RewardsService {
   private readonly running = new Map<string, { controller: AbortController; id: string }>();
@@ -25,6 +26,7 @@ export class RewardsService {
   private readonly adsTokens;
   readonly adsDelivery: AdsDeliveryService;
   readonly externalAccount: ExternalAccountController;
+  readonly captcha: RewardsCaptchaService;
   constructor(private readonly runtime: FeatureRuntime, private readonly provider: RewardsProviderPort = new BraveRewardsProvider(new NodeRewardsSigner())) {
     this.selfCustody = new SelfCustodyController(runtime, provider, profileId => this.repository(profileId).get(),
       (profileId, status) => {
@@ -43,6 +45,7 @@ export class RewardsService {
       profileId => this.repository(profileId).get(), profileId => this.save(profileId, this.repository(profileId).get()));
     this.adsDelivery = new AdsDeliveryService(runtime, profileId => this.repository(profileId).get(), profileId => this.save(profileId, this.repository(profileId).get()), context => this.adsTokens.refill(context), profileId => this.adsTokens.cancel(profileId));
     this.externalAccount = new ExternalAccountController(runtime, profileId => this.repository(profileId).get(), profileId => this.save(profileId, this.repository(profileId).get()));
+    this.captcha = new RewardsCaptchaService(runtime, profileId => this.repository(profileId).get(), profileId => this.save(profileId, this.repository(profileId).get()));
   }
 
   start(): void {
@@ -133,6 +136,7 @@ export class RewardsService {
     this.adsTokens.cancel(context.profileId);
     this.adsDelivery.cancel(context.profileId);
     this.externalAccount.cancel(context.profileId);
+    this.captcha.cancel(context.profileId);
     this.running.get(context.profileId)?.controller.abort();
     const current = this.repository(context.profileId).get();
     if (this.running.has(context.profileId)) return this.save(context.profileId, {
@@ -155,7 +159,7 @@ export class RewardsService {
     return this.save(context.profileId, { ...stored, account: { status: 'pending', provider: 'solana', message: '请在官方连接页面完成操作；等待服务确认' }, error: undefined });
   }
 
-  dispose(): void { this.disposed = true; this.selfCustody.dispose(); this.adsTokens.dispose(); this.adsDelivery.dispose(); this.externalAccount.dispose(); for (const operation of this.running.values()) operation.controller.abort(); this.running.clear(); }
+  dispose(): void { this.disposed = true; this.selfCustody.dispose(); this.adsTokens.dispose(); this.adsDelivery.dispose(); this.externalAccount.dispose(); this.captcha.dispose(); for (const operation of this.running.values()) operation.controller.abort(); this.running.clear(); }
 
   private async perform(profileId: string, status: 'registering' | 'refreshing',
     operation: (record: RewardsStored, seed: Uint8Array, signal: AbortSignal) => Promise<RewardsStored>): Promise<RewardsState> {
@@ -191,7 +195,7 @@ export class RewardsService {
   private regular(context: BrowserContext): void { if (context.isPrivate) throw new BrowserError('FORBIDDEN', 'Rewards账户管理仅在普通窗口中提供'); }
   private publicState(stored: RewardsStored, profileId: string): RewardsState {
     const { serviceKeyCipher, seedCipher, providerId, availableSelfCustody, ...state } = stored;
-    return this.externalAccount.state(profileId, withDeliveryCapabilities(state));
+    return { ...this.externalAccount.state(profileId, withDeliveryCapabilities(state)), captcha: this.captcha.state(profileId) };
   }
   private save(profileId: string, stored: RewardsStored): RewardsState {
     const state = this.publicState(this.repository(profileId).save({

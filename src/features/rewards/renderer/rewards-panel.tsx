@@ -6,6 +6,7 @@ import { AdsTokenSettings } from './ads-token-settings';
 import { AdsDeliverySettings } from './ads-delivery-settings';
 import { ExternalAccountSettings } from './external-account-settings';
 import { AdsHistoryPanel } from './ads-history-panel';
+import { CaptchaPanel } from './captcha-panel';
 import './rewards.css';
 
 export function RewardsPanel() {
@@ -71,6 +72,7 @@ export function RewardsPanel() {
       <AdsDeliverySettings state={state} pending={pending} run={run} />
       <ExternalAccountSettings state={state} pending={pending} run={run} />
       <AdsHistoryPanel />
+      <CaptchaPanel state={state} pending={pending} run={run} />
     </>}
     <Modal open={confirmOpen} title="创建Rewards钱包？" className="rewards-confirm" onOpenChange={setConfirmOpen}>
       <p>会生成加密保存在本资料中的Rewards钱包身份，并向已配置服务发送国家/地区代码 {country} 与签名注册请求。</p>

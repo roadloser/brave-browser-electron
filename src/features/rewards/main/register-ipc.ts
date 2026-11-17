@@ -20,6 +20,9 @@ export function registerRewardsIpc(runtime: FeatureRuntime, service: RewardsServ
     runtime.router.handle('rewards.signOutExternal', (_input, context) => service.externalAccount.signOut(context)),
     runtime.router.handle('rewards.adsHistory', (_input, context) => service.adsDelivery.history.list(context)),
     runtime.router.handle('rewards.reactToAd', (input, context) => service.adsDelivery.history.react(context, input.placementId, input.action)),
+    runtime.router.handle('rewards.openCaptcha', (_input, context) => service.captcha.open(context)),
+    runtime.router.handle('rewards.captchaResult', (input, context) => service.captcha.result(context, input.id, input.success)),
+    runtime.router.handle('rewards.snoozeCaptcha', (_input, context) => service.captcha.snooze(context)),
     runtime.router.handle('rewards.cancel', (_input, context) => service.cancel(context)),
   ];
   return () => releases.reverse().forEach(release => release());

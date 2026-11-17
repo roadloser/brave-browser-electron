@@ -44,7 +44,14 @@ export class BraveAdsTokenProvider implements AdsTokenProviderPort {
     return new URL(`/v3/confirmation/token/${encodeURIComponent(paymentId)}`, base);
   }
   private async body(response: Response): Promise<unknown> {
-    if (response.status === 401) throw new BrowserError('FORBIDDEN', '广告token服务要求验证码或重新授权，未自动绕过');
+    if (response.status === 401) {
+      const content = await response.text();
+      let captchaId: string | undefined;
+      if (content.length <= 16_384) {
+        try { captchaId = z.object({ captcha_id: z.string().min(1).max(256) }).parse(JSON.parse(content)).captcha_id; } catch {}
+      }
+      throw new BrowserError('FORBIDDEN', '广告token服务要求用户完成验证码', false, captchaId ? { captchaId } : undefined);
+    }
     if (response.status === 426) throw new BrowserError('UNAVAILABLE', '广告服务要求升级浏览器协议');
     if (!response.ok) throw new BrowserError('UNAVAILABLE', `广告token服务返回HTTP ${response.status}`, true, { status: response.status });
     const content = await response.text();

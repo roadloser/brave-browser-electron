@@ -53,6 +53,7 @@ export class AdsTokenService {
     let pending = repository.pending();
     let seed: Buffer | undefined;
     try {
+      if (pending?.captchaId) throw new BrowserError('FORBIDDEN', '请先在官方页面完成待处理验证码，再恢复原token批次', false, { captchaId: pending.captchaId });
       await this.crypto.initialize();
       if (controller.signal.aborted) throw new BrowserError('CANCELLED', 'token请求已取消');
       let batch: BlindedTokenBatch;
@@ -83,6 +84,7 @@ export class AdsTokenService {
     } catch (error) {
       if (!this.disposed && pending) repository.saveBatch({
         ...pending, status: 'failed',
+        captchaId: error instanceof BrowserError && typeof error.details?.captchaId === 'string' ? error.details.captchaId : pending.captchaId,
         error: controller.signal.aborted ? 'token请求取消或超时；已保留批次与nonce，未将未知结果标为成功' : error instanceof Error ? error.message : 'token请求失败',
       });
       if (!pending) throw error;
