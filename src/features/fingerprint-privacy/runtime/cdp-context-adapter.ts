@@ -9,6 +9,8 @@ import { parsePrivacyStorageKey } from './storage-key';
 import { resolvePolicyScope, type PrivacyPolicyScope } from './policy-scope';
 import type { WorldInstallResult, WorldPrivacyPolicy } from './world-types';
 import type { RuntimeOutcome, RuntimeOutcomeUpdate } from './runtime-outcome';
+import type { UserAgentPort } from '../../../shared/user-agent-port';
+import { NativeUserAgentController } from './native-user-agent-controller';
 
 type ExecutionContext = { id: number; origin: string; auxData?: { frameId?: string; isDefault?: boolean; type?: string } };
 
@@ -24,8 +26,9 @@ export class CdpPrivacyContextAdapter {
   private disposed = false;
   private pauses?: BootstrapPauseController;
   private controllers!: WorldControllerHost;
+  private userAgent!: NativeUserAgentController;
 
-  constructor(private readonly tab: TabSnapshot, private readonly debuggerHost: DebuggerHostPort,
+  constructor(private readonly tab: TabSnapshot, private readonly debuggerHost: DebuggerHostPort, private readonly userAgentPort: UserAgentPort,
     private readonly policy: (scope: PrivacyPolicyScope, kind: ExecutionContextKind) => WorldPrivacyPolicy,
     private readonly worldSource: string,
     private readonly coverage: (update: RuntimeOutcomeUpdate) => void) {
@@ -34,10 +37,12 @@ export class CdpPrivacyContextAdapter {
   async start(): Promise<void> {
     this.debugger = await this.debuggerHost.acquire(this.tab.id, 'fingerprint-privacy');
     this.controllers = new WorldControllerHost(this.debugger);
+    this.userAgent = new NativeUserAgentController(this.userAgentPort, this.debugger);
     const version = await this.debugger.send<{ protocolVersion: string; product: string }>('Browser.getVersion');
     if (version.protocolVersion !== '1.3' || !/150\.0\.7871\./.test(version.product)) {
       throw new BrowserError('UNAVAILABLE', '指纹CDP映射仅针对Electron43.7.5的Chromium150.0.7871版本，当前版本需重新取证');
     }
+    await this.userAgent.apply();
     this.pauses = new BootstrapPauseController(this.debugger,
       (contextId, callFrameId, sessionId) => this.injectPaused(contextId, callFrameId, sessionId),
       error => this.record('root:bootstrap-failure', { context: 'iframe', applied: false, reason: error instanceof Error ? error.message : '首读屏障失败' }));
@@ -72,6 +77,7 @@ export class CdpPrivacyContextAdapter {
       await this.debugger.send('Target.setAutoAttach', { autoAttach: false, waitForDebuggerOnStart: false, flatten: true }).catch(() => undefined);
       if (this.scriptId) await this.debugger.send('Page.removeScriptToEvaluateOnNewDocument', { identifier: this.scriptId }).catch(() => undefined);
       await this.debugger.send('Debugger.disable').catch(() => undefined);
+      await this.userAgent?.dispose().catch(error => this.coverage({ type: 'invalidate', reason: error instanceof Error ? error.message : '原生UA恢复失败' }));
     }).finally(() => this.debugger.dispose());
     this.contexts.clear(); this.childKinds.clear();
   }
@@ -114,6 +120,7 @@ export class CdpPrivacyContextAdapter {
       this.childKinds.set(childSession, kind);
       const timer = setTimeout(() => { void this.debugger.send('Runtime.runIfWaitingForDebugger', {}, childSession).catch(() => undefined); }, 5000);
       try {
+        if (kind !== 'worklet') await this.userAgent.apply(childSession);
         await this.debugger.send('Runtime.enable', {}, childSession);
         await this.debugger.send('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: true, flatten: true }, childSession);
         if (kind === 'iframe') {
@@ -158,6 +165,7 @@ export class CdpPrivacyContextAdapter {
       this.controllers.releaseSession(parameters.sessionId);
       this.coverage({ type: 'remove-session', sessionId: parameters.sessionId });
       this.childKinds.delete(parameters.sessionId);
+      this.userAgent.forget(parameters.sessionId);
     } else if (method === 'Page.frameNavigated' && !sessionId) {
       const frame = parameters.frame as { id?: string; parentId?: string; url?: string; securityOrigin?: string } | undefined;
       if (frame?.id && !frame.parentId) {

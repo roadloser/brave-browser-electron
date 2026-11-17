@@ -134,19 +134,16 @@ export class PrivacyService {
       if (tab.profileId !== context.profileId || (context.isPrivate && tab.contextId !== context.contextId)) continue;
       if (site && resolvePrivacySite(tab.url) !== site) continue;
       this.runtime.publish('privacy.changed', this.state(tab, tab.url, tab.id), { windowId: tab.windowId });
-      if (this.cdpContexts.has(tab.id) && this.effectiveMode(tab, resolvePrivacySite(tab.url) ?? '') === 'off') {
-        this.cdpContexts.get(tab.id)?.dispose(); this.cdpContexts.delete(tab.id);
-        this.cdpOutcomes.delete(tab.id);
-      } else if (!this.cdpContexts.has(tab.id)) await this.prepareContext(tab);
+      if (!this.cdpContexts.has(tab.id)) await this.prepareContext(tab);
       this.runtime.core.reload(tab.id);
     }
   }
 
   private async prepareContext(tab: TabSnapshot): Promise<void> {
     const site = resolvePrivacySite(tab.url);
-    if (!site || this.effectiveMode(tab, site) === 'off') return;
+    if (!site) return;
     if (this.cdpContexts.has(tab.id)) return;
-    const adapter = new CdpPrivacyContextAdapter(tab, this.runtime.debugger, (scope, kind) => {
+    const adapter = new CdpPrivacyContextAdapter(tab, this.runtime.debugger, this.runtime.userAgent, (scope, kind) => {
       const sourceSite = resolvePrivacySite(scope.policyOrigin);
       if (!sourceSite) return { mode: 'off', token: null, scope: sourceSite };
       const mode = this.effectiveMode(tab, sourceSite);
