@@ -22,6 +22,7 @@ export function install(policy: WorldPrivacyPolicy): WorldInstallResult {
   coveredApis.push(...audio.coveredApis);
   const canvas = installBraveCanvasPolicy({ pixels: bytes => ({ active: true, bytes: algorithms.pixels(bytes) }) });
   coveredApis.push(...canvas.coveredApis.map(name => `Canvas.${name}`));
+  failures.push(...canvas.failures);
   const navigator = installBraveNavigator(policy, algorithms);
   const webgl = installBraveWebGL(policy, algorithms);
   const geometry = installBraveGeometry(policy);
@@ -34,4 +35,16 @@ export function install(policy: WorldPrivacyPolicy): WorldInstallResult {
   coveredApis.push(...navigator.coveredApis, ...webgl.coveredApis, ...screen.coveredApis, ...analyser.coveredApis, ...hitTests.coveredApis, ...strictWebgl.coveredApis, ...geometry.coveredApis, ...pointer.coveredApis, ...textMetrics.coveredApis);
   failures.push(...navigator.failures, ...webgl.failures, ...screen.failures, ...analyser.failures, ...hitTests.failures, ...strictWebgl.failures, ...geometry.failures, ...pointer.failures, ...textMetrics.failures);
   return { installed: coveredApis.length > 0, coveredApis, failures, algorithmRevision: RANDEN_REVISION };
+}
+
+export function installController(initialPolicy: WorldPrivacyPolicy) {
+  const policy = { ...initialPolicy };
+  const result = install(policy);
+  return {
+    report() { return result; },
+    updateZoom(factor: number) {
+      if (!Number.isFinite(factor) || factor <= 0 || factor > 10) throw new Error('缩放因子无效');
+      policy.pageZoom = factor;
+    },
+  };
 }

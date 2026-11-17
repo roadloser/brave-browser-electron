@@ -28,6 +28,14 @@ export class PrivacyService {
     this.tokens = new BraveTokenProvider(runtime.storage);
     this.stopCore = runtime.core.onEvent(event => {
       if (event.type === 'stateChanged') this.acceptState(event.state);
+      if (event.type === 'zoomChanged') {
+        void this.cdpContexts.get(event.tabId)?.updateZoom(event.factor).catch(error => {
+          const outcomes = this.cdpOutcomes.get(event.tabId) ?? new Map();
+          outcomes.set('window', { context: 'window', applied: false, firstRead: 'unknown', reason: error instanceof Error ? error.message : '缩放策略更新失败' });
+          this.cdpOutcomes.set(event.tabId, outcomes);
+          this.runtime.publish('privacy.changed', this.state(event.context, this.tabs.get(event.tabId)?.url, event.tabId), { windowId: event.windowId });
+        });
+      }
       if (event.type === 'tabClosed') {
         this.tabs.delete(event.tabId);
         this.cdpContexts.get(event.tabId)?.dispose(); this.cdpContexts.delete(event.tabId); this.cdpOutcomes.delete(event.tabId);

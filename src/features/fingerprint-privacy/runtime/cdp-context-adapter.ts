@@ -4,6 +4,7 @@ import type { DebuggerHostPort, DebuggerLease } from '../../../shared/runtime-po
 import { BrowserError } from '../../../shared/errors';
 import { cdpWorldSource } from './cdp-bridge-source';
 import { BootstrapPauseController } from './bootstrap-pause-controller';
+import { WorldControllerHost } from './world-controller-host';
 import { parsePrivacyStorageKey, type PrivacyStorageScope } from './storage-key';
 import type { WorldInstallResult, WorldPrivacyPolicy } from './world-types';
 
@@ -21,6 +22,7 @@ export class CdpPrivacyContextAdapter {
   private scriptId?: string;
   private disposed = false;
   private pauses?: BootstrapPauseController;
+  private controllers!: WorldControllerHost;
 
   constructor(private readonly tab: TabSnapshot, private readonly debuggerHost: DebuggerHostPort,
     private readonly policy: (scope: PrivacyStorageScope, kind: ExecutionContextKind) => WorldPrivacyPolicy,
@@ -30,6 +32,7 @@ export class CdpPrivacyContextAdapter {
 
   async start(): Promise<void> {
     this.debugger = await this.debuggerHost.acquire(this.tab.id, 'fingerprint-privacy');
+    this.controllers = new WorldControllerHost(this.debugger);
     const version = await this.debugger.send<{ protocolVersion: string; product: string }>('Browser.getVersion');
     if (version.protocolVersion !== '1.3' || !/150\.0\.7871\./.test(version.product)) {
       throw new BrowserError('UNAVAILABLE', '指纹CDP映射仅针对Electron43.7.5的Chromium150.0.7871版本，当前版本需重新取证');
@@ -60,6 +63,7 @@ export class CdpPrivacyContextAdapter {
     if (this.disposed) return;
     this.disposed = true;
     if (!this.debugger) return;
+    this.controllers?.dispose();
     this.releases.reverse().forEach(release => release());
     const resume = [...this.childKinds.keys()].map(sessionId => this.debugger.send('Runtime.runIfWaitingForDebugger', {}, sessionId).catch(() => undefined));
     void Promise.allSettled(resume).then(async () => {
@@ -69,6 +73,11 @@ export class CdpPrivacyContextAdapter {
       await this.debugger.send('Debugger.disable').catch(() => undefined);
     }).finally(() => this.debugger.dispose());
     this.contexts.clear(); this.childKinds.clear();
+  }
+
+  async updateZoom(factor: number): Promise<void> {
+    if (this.disposed || !this.controllers) return;
+    await this.controllers.updateZoom(factor);
   }
 
   private async message(method: string, parameters: Record<string, unknown>, sessionId?: string): Promise<void> {
@@ -89,8 +98,10 @@ export class CdpPrivacyContextAdapter {
         }
       }
     } else if (method === 'Runtime.executionContextDestroyed') {
+      this.controllers.releaseContext(Number(parameters.executionContextId), sessionId);
       this.contexts.delete(this.key(sessionId, Number(parameters.executionContextId)));
     } else if (method === 'Runtime.executionContextsCleared') {
+      this.controllers.releaseSession(sessionId);
       for (const key of this.contexts.keys()) if (key.startsWith(`${sessionId ?? 'root'}:`)) this.contexts.delete(key);
     } else if (method === 'Target.attachedToTarget') {
       const childSession = typeof parameters.sessionId === 'string' ? parameters.sessionId : undefined;
@@ -114,11 +125,12 @@ export class CdpPrivacyContextAdapter {
             return;
           }
           const policy = this.policy({ origin: this.rootOrigin, topLevelSite: this.rootOrigin, nonce: null }, kind);
-          const result = await this.debugger.send<{ result?: { value?: WorldInstallResult } }>('Runtime.evaluate', {
-            expression: cdpWorldSource(this.worldSource, policy), returnByValue: true,
+          const result = await this.debugger.send<{ result?: { objectId?: string } }>('Runtime.evaluate', {
+            expression: cdpWorldSource(this.worldSource, policy), returnByValue: false,
           }, childSession);
-          this.outcome({ context: kind, applied: Boolean(result.result?.value?.installed), coveredApis: result.result?.value?.coveredApis,
-            failures: result.result?.value?.failures, firstRead: 'prepared',
+          const installed = await this.controllerReport(`${childSession}:target`, result.result?.objectId, childSession);
+          this.outcome({ context: kind, applied: installed.installed, coveredApis: installed.coveredApis,
+            failures: installed.failures, firstRead: 'prepared',
             reason: '按Brave继承创建者top-frame策略且off-main不加nonce；仅Paint严格hit-test暴露项，未运行对照' });
           return;
         }
@@ -133,10 +145,10 @@ export class CdpPrivacyContextAdapter {
           this.outcome({ context: kind, applied: false, reason: parsed?.nonce ? '真实StorageKey含nonce，尚未映射Brave FastHash，保持原API' : '目标未提供可映射的真实StorageKey' });
         } else {
           const policy = this.policy(parsed, kind);
-          const result = await this.debugger.send<{ result?: { value?: WorldInstallResult } }>('Runtime.evaluate', {
-            expression: cdpWorldSource(this.worldSource, policy), returnByValue: true, awaitPromise: false,
+          const result = await this.debugger.send<{ result?: { objectId?: string } }>('Runtime.evaluate', {
+            expression: cdpWorldSource(this.worldSource, policy), returnByValue: false, awaitPromise: false,
           }, childSession);
-          const installed = result.result?.value;
+          const installed = await this.controllerReport(`${childSession}:target`, result.result?.objectId, childSession);
           this.outcome({ context: kind, applied: Boolean(installed?.installed), coveredApis: installed?.coveredApis, failures: installed?.failures, firstRead: 'prepared',
             reason: installed?.installed ? '已在目标恢复前安装固定算法bundle，未进行行为对照' : '目标无对应API或策略关闭' });
         }
@@ -145,6 +157,7 @@ export class CdpPrivacyContextAdapter {
         await this.debugger.send('Runtime.runIfWaitingForDebugger', {}, childSession).catch(() => undefined);
       }
     } else if (method === 'Target.detachedFromTarget' && typeof parameters.sessionId === 'string') {
+      this.controllers.releaseSession(parameters.sessionId);
       this.childKinds.delete(parameters.sessionId);
     } else if (method === 'Page.frameNavigated' && !sessionId) {
       const frame = parameters.frame as { id?: string; parentId?: string; url?: string; securityOrigin?: string } | undefined;
@@ -165,10 +178,11 @@ export class CdpPrivacyContextAdapter {
         this.outcome({ context: kind, applied: false, reason: parsed?.nonce ? 'StorageKey nonce已识别，FastHash尚未映射，不注入错误token' : '无法映射真实StorageKey' });
         return;
       }
-      const result = await this.debugger.send<{ result?: { value?: WorldInstallResult } }>('Runtime.evaluate', {
-        contextId: context.id, expression: cdpWorldSource(this.worldSource, this.policy(parsed, kind)), returnByValue: true,
+      const result = await this.debugger.send<{ result?: { objectId?: string } }>('Runtime.evaluate', {
+        contextId: context.id, expression: cdpWorldSource(this.worldSource, this.policy(parsed, kind)), returnByValue: false,
       }, sessionId);
-      this.outcome({ context: kind, applied: Boolean(result.result?.value?.installed), coveredApis: result.result?.value?.coveredApis, failures: result.result?.value?.failures, firstRead: 'unknown',
+      const installed = await this.controllerReport(this.key(sessionId, context.id), result.result?.objectId, sessionId, context.id);
+      this.outcome({ context: kind, applied: installed.installed, coveredApis: installed.coveredApis, failures: installed.failures, firstRead: 'unknown',
         reason: '基于真实StorageKey安装固定算法bundle，contextCreated异步路径首脚本读取时序尚未证明' });
     } finally { this.initializing.delete(key); }
   }
@@ -183,15 +197,20 @@ export class CdpPrivacyContextAdapter {
       this.outcome({ context: kind, applied: false, firstRead: 'failed', reason: scope?.nonce ? '首读暂停已取得真实nonce，FastHash尚未映射，拒绝错误token' : '首读暂停未取得合法StorageKey' });
       return;
     }
-    const installed = await this.debugger.send<{ result?: { value?: WorldInstallResult } }>('Debugger.evaluateOnCallFrame', {
-      callFrameId, expression: cdpWorldSource(this.worldSource, this.policy(scope, kind)), returnByValue: true, timeout: 4000,
+    const result = await this.debugger.send<{ result?: { objectId?: string } }>('Debugger.evaluateOnCallFrame', {
+      callFrameId, expression: cdpWorldSource(this.worldSource, this.policy(scope, kind)), returnByValue: false, timeout: 4000,
     }, sessionId);
-    this.outcome({ context: kind, applied: Boolean(installed.result?.value?.installed), coveredApis: installed.result?.value?.coveredApis,
-      failures: installed.result?.value?.failures, firstRead: 'prepared',
+    const installed = await this.controllerReport(this.key(sessionId, contextId), result.result?.objectId, sessionId, contextId);
+    this.outcome({ context: kind, applied: installed.installed, coveredApis: installed.coveredApis,
+      failures: installed.failures, firstRead: 'prepared',
       reason: '自身nonce bootstrap暂停内依据真实StorageKey安装固定算法bundle后恢复；首读代码链已闭合，尚未运行对照' });
   }
 
   private key(sessionId: string | undefined, contextId: number): string { return `${sessionId ?? 'root'}:${contextId}`; }
+  private controllerReport(identity: string, objectId: string | undefined, sessionId?: string, contextId?: number): Promise<WorldInstallResult> {
+    if (!objectId) throw new BrowserError('UNAVAILABLE', '页面运行时未建立受控对象');
+    return this.controllers.register(identity, objectId, sessionId, contextId);
+  }
   private updateRootOrigin(url: string, origin?: string): void {
     try {
       const value = new URL(origin && origin !== '://' ? origin : url);
