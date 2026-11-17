@@ -11,6 +11,7 @@ import type { WorldInstallResult, WorldPrivacyPolicy } from './world-types';
 import type { RuntimeOutcome, RuntimeOutcomeUpdate } from './runtime-outcome';
 import type { UserAgentPort } from '../../../shared/user-agent-port';
 import { NativeUserAgentController } from './native-user-agent-controller';
+import { RuntimeDeadline, assertRuntimeActive } from './runtime-deadline';
 
 type ExecutionContext = { id: number; origin: string; auxData?: { frameId?: string; isDefault?: boolean; type?: string } };
 
@@ -44,8 +45,10 @@ export class CdpPrivacyContextAdapter {
     }
     await this.userAgent.apply();
     this.pauses = new BootstrapPauseController(this.debugger,
-      (contextId, callFrameId, sessionId) => this.injectPaused(contextId, callFrameId, sessionId),
-      error => this.record('root:bootstrap-failure', { context: 'iframe', applied: false, reason: error instanceof Error ? error.message : '首读屏障失败' }));
+      (contextId, callFrameId, sessionId, signal) => this.injectPaused(contextId, callFrameId, sessionId, signal),
+      (error, sessionId, contextId) => this.record(contextId === undefined ? `${sessionId ?? 'root'}:bootstrap-failure` : this.key(sessionId, contextId),
+        { context: !sessionId && this.contexts.get(this.key(sessionId, contextId ?? -1))?.auxData?.frameId === this.rootFrameId ? 'window' : 'iframe',
+          applied: false, firstRead: 'failed', reason: error instanceof Error ? error.message : '首读屏障失败' }));
     this.releases.push(this.debugger.onMessage((method, parameters, sessionId) => {
       void this.message(method, parameters, sessionId).catch(error => {
         this.record(`${sessionId ?? 'root'}:runtime-failure`, { context: sessionId ? this.childKinds.get(sessionId) ?? 'dedicated-worker' : 'iframe', applied: false, reason: error instanceof Error ? error.message : '运行时映射失败' });
@@ -118,15 +121,20 @@ export class CdpPrivacyContextAdapter {
       if (!childSession) return;
       const kind: ExecutionContextKind = target?.type === 'service_worker' ? 'service-worker' : target?.type === 'shared_worker' ? 'shared-worker' : target?.type === 'iframe' ? 'iframe' : target?.type === 'worklet' ? 'worklet' : 'dedicated-worker';
       this.childKinds.set(childSession, kind);
-      const timer = setTimeout(() => { void this.debugger.send('Runtime.runIfWaitingForDebugger', {}, childSession).catch(() => undefined); }, 5000);
+      const deadline = new RuntimeDeadline(5000, () => {
+        void this.debugger.send('Runtime.runIfWaitingForDebugger', {}, childSession).catch(() => undefined);
+        this.record(`${childSession}:target`, { context: kind, applied: false, firstRead: 'failed', reason: '子目标初始化超过5秒，已恢复；不能声称首读受保护' });
+      });
       try {
         if (kind !== 'worklet') await this.userAgent.apply(childSession);
+        assertRuntimeActive(deadline.signal, this.disposed);
         await this.debugger.send('Runtime.enable', {}, childSession);
         await this.debugger.send('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: true, flatten: true }, childSession);
         if (kind === 'iframe') {
           await this.debugger.send('Debugger.enable', {}, childSession);
           await this.debugger.send('Page.enable', {}, childSession);
           await this.debugger.send('Page.addScriptToEvaluateOnNewDocument', { source: this.pauses!.source() }, childSession);
+          assertRuntimeActive(deadline.signal, this.disposed);
           return;
         }
         if (kind === 'worklet') {
@@ -135,16 +143,19 @@ export class CdpPrivacyContextAdapter {
             return;
           }
           const policy = this.policy(resolvePolicyScope({ origin: this.rootOrigin, topLevelSite: this.rootOrigin, nonce: null }, kind, this.rootOrigin), kind);
+          assertRuntimeActive(deadline.signal, this.disposed);
           const result = await this.debugger.send<{ result?: { objectId?: string } }>('Runtime.evaluate', {
             expression: cdpWorldSource(this.worldSource, policy), returnByValue: false,
           }, childSession);
           const installed = await this.controllerReport(`${childSession}:target`, result.result?.objectId, childSession);
+          assertRuntimeActive(deadline.signal, this.disposed);
           this.record(`${childSession}:target`, { context: kind, applied: installed.installed, coveredApis: installed.coveredApis,
             failures: installed.failures, firstRead: 'prepared',
             reason: '按Brave继承创建者top-frame策略且off-main不加nonce；仅Paint严格hit-test暴露项，未运行对照' });
           return;
         }
         const scope = await this.debugger.send<{ storageKey: string }>('Storage.getStorageKey', {}, childSession);
+        assertRuntimeActive(deadline.signal, this.disposed);
         const parsed = parsePrivacyStorageKey(scope.storageKey);
         if (!parsed) {
           this.record(`${childSession}:target`, { context: kind, applied: false, reason: '目标未提供可映射的真实StorageKey' });
@@ -154,11 +165,12 @@ export class CdpPrivacyContextAdapter {
             expression: cdpWorldSource(this.worldSource, policy), returnByValue: false, awaitPromise: false,
           }, childSession);
           const installed = await this.controllerReport(`${childSession}:target`, result.result?.objectId, childSession);
+          assertRuntimeActive(deadline.signal, this.disposed);
           this.record(`${childSession}:target`, { context: kind, applied: Boolean(installed?.installed), coveredApis: installed?.coveredApis, failures: installed?.failures, firstRead: 'prepared',
             reason: installed?.installed ? '已在目标恢复前安装固定算法bundle，未进行行为对照' : '目标无对应API或策略关闭' });
         }
       } finally {
-        clearTimeout(timer);
+        deadline.dispose();
         await this.debugger.send('Runtime.runIfWaitingForDebugger', {}, childSession).catch(() => undefined);
       }
     } else if (method === 'Target.detachedFromTarget' && typeof parameters.sessionId === 'string') {
@@ -194,13 +206,15 @@ export class CdpPrivacyContextAdapter {
     } finally { this.initializing.delete(key); }
   }
 
-  private async injectPaused(contextId: number, callFrameId: string, sessionId?: string): Promise<void> {
+  private async injectPaused(contextId: number, callFrameId: string, sessionId?: string, signal?: AbortSignal): Promise<void> {
+    assertRuntimeActive(signal, this.disposed);
     const context = this.contexts.get(this.key(sessionId, contextId));
     if (!context?.auxData?.frameId || !context.auxData.isDefault) return;
     const kind: ExecutionContextKind = !sessionId && context.auxData.frameId === this.rootFrameId ? 'window' : 'iframe';
     const tree = await this.debugger.send<{ frameTree: { frame: { url: string; securityOrigin?: string } } }>('Page.getFrameTree');
     this.updateRootOrigin(tree.frameTree.frame.url, tree.frameTree.frame.securityOrigin);
     const storageResult = await this.debugger.send<{ storageKey: string }>('Storage.getStorageKey', { frameId: context.auxData.frameId }, sessionId);
+    assertRuntimeActive(signal, this.disposed);
     const scope = parsePrivacyStorageKey(storageResult.storageKey);
     if (!scope) {
       this.record(this.key(sessionId, contextId), { context: kind, applied: false, firstRead: 'failed', reason: '首读暂停未取得合法StorageKey' });
@@ -210,6 +224,7 @@ export class CdpPrivacyContextAdapter {
       callFrameId, expression: cdpWorldSource(this.worldSource, this.policy(resolvePolicyScope(scope, kind, this.rootOrigin), kind)), returnByValue: false, timeout: 4000,
     }, sessionId);
     const installed = await this.controllerReport(this.key(sessionId, contextId), result.result?.objectId, sessionId, contextId);
+    assertRuntimeActive(signal, this.disposed);
     this.record(this.key(sessionId, contextId), { context: kind, applied: installed.installed, coveredApis: installed.coveredApis,
       failures: installed.failures, firstRead: 'prepared',
       reason: '自身nonce bootstrap暂停内依据真实StorageKey安装固定算法bundle后恢复；首读代码链已闭合，尚未运行对照' });
