@@ -1,6 +1,6 @@
-import type { FramePrivacyPolicy } from './protocol';
+import type { WorldPrivacyPolicy } from './world-types';
 
-export function installBraveAudioPolicy(policy: FramePrivacyPolicy): { installed: boolean; coveredApis: string[] } {
+export function installBraveAudioPolicy(policy: WorldPrivacyPolicy): { installed: boolean; coveredApis: string[] } {
   if (policy.mode === 'off' || !policy.token || typeof AudioBuffer === 'undefined') return { installed: false, coveredApis: [] };
   const prototype = AudioBuffer.prototype;
   const channelDescriptor = Object.getOwnPropertyDescriptor(prototype, 'getChannelData');

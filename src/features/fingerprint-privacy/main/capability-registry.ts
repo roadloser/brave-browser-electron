@@ -2,25 +2,27 @@ import type { ExecutionContextKind, FingerprintApi, PrivacyCapability } from '..
 
 const contexts: ExecutionContextKind[] = ['window', 'iframe', 'dedicated-worker', 'shared-worker', 'service-worker', 'worklet'];
 const apis: FingerprintApi[] = ['navigator', 'canvas', 'audio', 'webgl', 'fonts', 'screen'];
+const reasons: Record<FingerprintApi, string> = {
+  audio: 'AudioBuffer两API与Analyser四API已映射Brave系数/LFSR；频域由公开dB值反算存在精度差异，未运行对照',
+  canvas: 'HMAC-SHA256/LFSR像素公式已映射读像素/导出与严格hit-test；颜色空间、SkPixmap格式和worker首读未运行对照',
+  navigator: '固定Abseil Randen映射hardwareConcurrency/deviceMemory，语言与严格UA；UA-CH/属性可探测性仍有差异',
+  webgl: '真实feature默认与严格debug字符串/扩展、WebGL2参数已局部映射；全部严格GL API禁止尚未完成',
+  fonts: 'Brave在本地font availability与font fallback解析介入；网页属性覆写不能代替布局层完整名单/随机准入',
+  screen: 'Randen整数偏移和固定screen尺寸已映射；跨来源顶层viewport/多屏/PointerEvents仍需完整接入',
+};
 
 export function privacyCapabilities(): PrivacyCapability[] {
   return contexts.flatMap(context => apis.map(api => {
-    const audioFrame = api === 'audio' && context === 'window';
-    const canvasFrame = api === 'canvas' && context === 'window';
-    const reason = audioFrame
-      ? '已按 Brave token 与音频公式接入 AudioBuffer.getChannelData/copyFromChannel；JS覆写可探测，分析器与其余音频输出未覆盖，尚未运行对照'
-      : canvasFrame ? '已接Brave HMAC-SHA256/LFSR像素算法，覆盖主frame 2D读像素及HTML/Offscreen导出；JS可探测/颜色空间与跨上下文未完成，未运行对照'
-      : context === 'iframe'
-        ? '已接固定CDP真实StorageKey与Audio两API；nonce尚未映射FastHash，首读时序未观察，运行状态按当前标签报告'
-        : context === 'service-worker'
-          ? '已接Target自动附加/真实StorageKey/最终恢复；AudioBuffer不一定存在，其他worker API尚未实现'
-          : context === 'dedicated-worker' || context === 'shared-worker' || context === 'worklet'
-            ? context === 'worklet' ? 'Worklet未提供与Target worker相同覆盖保证，不推导已接入' : '已接固定CDP Target自动附加/StorageKey/finally恢复；目标API与首次读取未观察'
-            : api === 'navigator'
-              ? 'Brave使用Abseil Randen PRNG，未采用随机替代；待成熟同算法实现'
-              : 'Brave在Blink产出时介入；当前TS页面入口不足以证明相同生成时机和算法覆盖';
+    const worker = ['dedicated-worker', 'shared-worker', 'service-worker'].includes(context);
+    const absent = (worker && (api === 'audio' || api === 'screen')) || (context === 'worklet' && api !== 'canvas');
+    if (absent) return {
+      api, context, status: 'not-applicable', implemented: false, observed: false,
+      reason: '固定Chromium150 WebIDL未向此执行上下文暴露该API族；不把不存在的API记为阻塞或成功',
+    } satisfies PrivacyCapability;
+    const implemented = api !== 'fonts' && context !== 'worklet';
     return {
-      api, context, status: audioFrame || canvasFrame ? 'partial' : 'blocked', implemented: audioFrame || canvasFrame, observed: false, reason,
+      api, context, status: implemented ? 'partial' : 'blocked', implemented, observed: false,
+      reason: context === 'worklet' ? 'Paint仅严格isPointInPath/isPointInStroke两API已准备；owner scope与主线程Paint首读仍需闭合' : reasons[api],
       evidenceId: api === 'audio' ? 'ev_493270e4673e01a32ffd7848deb1ad323fb1286aa9352c7813f6305beb459df9' : undefined,
     } satisfies PrivacyCapability;
   }));

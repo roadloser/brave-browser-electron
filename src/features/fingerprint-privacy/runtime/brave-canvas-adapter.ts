@@ -1,7 +1,6 @@
 import type { CanvasFarblingBridge } from './canvas-protocol';
 
-export function installBraveCanvasPolicy(bridgeName: string): { installed: boolean; coveredApis: string[] } {
-  const bridge = (globalThis as unknown as Record<string, CanvasFarblingBridge>)[bridgeName];
+export function installBraveCanvasPolicy(bridge: CanvasFarblingBridge): { installed: boolean; coveredApis: string[] } {
   if (!bridge || typeof bridge.pixels !== 'function') return { installed: false, coveredApis: [] };
   const release: (() => void)[] = [];
   const coveredApis: string[] = [];

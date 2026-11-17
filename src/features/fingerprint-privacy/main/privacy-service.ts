@@ -1,5 +1,5 @@
 import { BrowserWindow } from 'electron';
-import type { Session } from 'electron';
+import { cpus } from 'node:os';
 import type { BrowserContext, BrowserSnapshot, TabSnapshot } from '../../../shared/contracts/browser-core';
 import type { PrivacyMode, PrivacyState } from '../../../shared/contracts/fingerprint-privacy';
 import type { CommandContext, FeatureRuntime } from '../../../shared/module-lifecycle';
@@ -8,26 +8,25 @@ import { PrivacyRepository } from './privacy-repository';
 import { BraveTokenProvider, type FarblingTokenProviderPort } from './token-provider';
 import { resolvePrivacySite } from './site-scope-resolver';
 import { privacyCapabilities } from './capability-registry';
-import type { FramePrivacyPolicy } from '../runtime/protocol';
 import { CdpPrivacyContextAdapter } from '../runtime/cdp-context-adapter';
 import type { ExecutionContextKind } from '../../../shared/contracts/fingerprint-privacy';
+import { capabilityWithOutcome, coverageFromOutcomes, type RuntimeOutcome } from './runtime-coverage';
+import { chromiumNonceHash } from './chromium-nonce-hash';
 
 export class PrivacyService {
   private readonly tokens: FarblingTokenProviderPort;
   private readonly privateModes = new Map<string, { defaultMode?: PrivacyMode; sites: Map<string, PrivacyMode> }>();
-  private readonly sessions = new Map<Session, { id: string; contextId: string }>();
   private readonly tabs = new Map<string, TabSnapshot>();
   private readonly stopCore;
   private readonly stopPreparation;
   private readonly cdpContexts = new Map<string, CdpPrivacyContextAdapter>();
-  private readonly cdpOutcomes = new Map<string, Map<ExecutionContextKind, { applied: boolean; reason: string }>>();
+  private readonly cdpOutcomes = new Map<string, Map<ExecutionContextKind, RuntimeOutcome>>();
   private readonly generation = Date.now();
   private revision = 0;
 
   constructor(private readonly runtime: FeatureRuntime) {
     this.tokens = new BraveTokenProvider(runtime.storage);
     this.stopCore = runtime.core.onEvent(event => {
-      if (event.type === 'sessionCreated') this.attach(event.context);
       if (event.type === 'stateChanged') this.acceptState(event.state);
       if (event.type === 'tabClosed') {
         this.tabs.delete(event.tabId);
@@ -36,9 +35,6 @@ export class PrivacyService {
       if (event.type === 'contextDisposed' && event.context.isPrivate) {
         this.privateModes.delete(event.context.contextId); this.tokens.release(event.context.contextId);
         for (const [tabId, tab] of this.tabs) if (tab.contextId === event.context.contextId) this.tabs.delete(tabId);
-        for (const [session, preload] of this.sessions) if (preload.contextId === event.context.contextId) {
-          session.unregisterPreloadScript(preload.id); this.sessions.delete(session);
-        }
       }
     });
     this.stopPreparation = runtime.core.registerBeforeNavigate('fingerprint-context', tab => this.prepareContext(tab));
@@ -49,7 +45,6 @@ export class PrivacyService {
       const window = this.runtime.core.getWindowForSender(nativeWindow.webContents.id);
       if (window) { this.acceptState(this.runtime.core.getState(window.id)); break; }
     }
-    for (const context of this.runtime.core.getContexts()) this.attach(context);
   }
 
   get(context: CommandContext, tabId?: string): PrivacyState {
@@ -76,16 +71,6 @@ export class PrivacyService {
     return this.state(context, origin);
   }
 
-  framePolicy(contentsId: number, url: string): FramePrivacyPolicy {
-    const tab = this.tabForContents(contentsId);
-    const site = resolvePrivacySite(url);
-    if (!tab || !site) return { mode: 'off', token: null, scope: null };
-    const mode = this.effectiveMode(tab, site);
-    if (mode === 'off') return { mode, token: null, scope: site };
-    const token = this.tokens.forSite(tab, site);
-    return { mode, token: { high: token.high, low: token.low }, scope: site };
-  }
-
   tabForContents(contentsId: number): TabSnapshot | undefined {
     for (const tab of this.tabs.values()) {
       try { if (this.runtime.core.getTabWebContents(tab.id).id === contentsId) return tab; } catch {}
@@ -97,8 +82,7 @@ export class PrivacyService {
     this.stopCore(); this.stopPreparation();
     for (const adapter of this.cdpContexts.values()) adapter.dispose();
     this.cdpContexts.clear(); this.cdpOutcomes.clear();
-    for (const [session, preload] of this.sessions) session.unregisterPreloadScript(preload.id);
-    this.sessions.clear(); this.tokens.dispose(); this.privateModes.clear(); this.tabs.clear();
+    this.tokens.dispose(); this.privateModes.clear(); this.tabs.clear();
   }
 
   private state(context: BrowserContext, url?: string, tabId?: string): PrivacyState {
@@ -109,11 +93,11 @@ export class PrivacyService {
     const siteMode = site ? context.isPrivate ? privateSettings?.sites.get(site) : repository.siteMode(site) : undefined;
     return {
       mode: siteMode ?? defaultMode, defaultMode, site, inherited: siteMode === undefined,
-      runtimeVersion: 'electron43-chromium150-brave-audio-v2', capabilities: privacyCapabilities().map(capability => {
+      runtimeVersion: 'electron43-chromium150-brave-algorithms-v3', capabilities: privacyCapabilities().map(capability => {
         const outcome = tabId ? this.cdpOutcomes.get(tabId)?.get(capability.context) : undefined;
-        if (capability.api !== 'audio' || !outcome) return capability;
-        return { ...capability, status: outcome.applied ? 'partial' : 'blocked', implemented: outcome.applied, observed: false, reason: outcome.reason };
+        return capabilityWithOutcome(capability, outcome);
       }),
+      coverage: coverageFromOutcomes(tabId ? this.cdpOutcomes.get(tabId) : undefined),
       scope: site ? { profileId: context.profileId, contextId: context.contextId, site, generation: this.generation } : null,
       revision: this.revision + repository.state().revision,
     };
@@ -130,12 +114,6 @@ export class PrivacyService {
     const settings = this.privateModes.get(contextId) ?? { sites: new Map<string, PrivacyMode>() };
     this.privateModes.set(contextId, settings);
     return settings;
-  }
-  private attach(context: BrowserContext): void {
-    const session = this.runtime.core.sessionForContext(context);
-    if (this.sessions.has(session)) return;
-    const id = session.registerPreloadScript({ type: 'frame', filePath: this.runtime.assets.privacyPreloadPath });
-    this.sessions.set(session, { id, contextId: context.contextId });
   }
   private acceptState(state: BrowserSnapshot): void {
     const windowIds = new Set(state.windows.map(window => window.id));
@@ -159,14 +137,17 @@ export class PrivacyService {
     const site = resolvePrivacySite(tab.url);
     if (!site || this.effectiveMode(tab, site) === 'off') return;
     if (this.cdpContexts.has(tab.id)) return;
-    const adapter = new CdpPrivacyContextAdapter(tab, this.runtime.debugger, scope => {
+    const adapter = new CdpPrivacyContextAdapter(tab, this.runtime.debugger, (scope, kind) => {
       const sourceSite = resolvePrivacySite(scope.origin);
-      if (!sourceSite || scope.nonce) return { mode: 'off', token: null, scope: sourceSite };
+      if (!sourceSite) return { mode: 'off', token: null, scope: sourceSite };
       const mode = this.effectiveMode(tab, sourceSite);
       if (mode === 'off') return { mode, token: null, scope: sourceSite };
       const token = this.tokens.forSite(tab, sourceSite);
-      return { mode, token: { high: token.high, low: token.low }, scope: sourceSite };
-    }, outcome => {
+      const hash = scope.nonce ? chromiumNonceHash(scope.nonce) : 0n;
+      return { mode, token: { high: (BigInt(token.high) ^ hash).toString(), low: (BigInt(token.low) ^ hash).toString() },
+        scope: sourceSite, hardwareConcurrency: cpus().length, webglBalanced: false,
+        screenFingerprinting: process.platform === 'darwin' && (kind === 'window' || kind === 'iframe') };
+    }, this.runtime.assets.privacyWorldSource, outcome => {
       const outcomes = this.cdpOutcomes.get(tab.id) ?? new Map();
       outcomes.set(outcome.context, outcome); this.cdpOutcomes.set(tab.id, outcomes);
       this.revision++;

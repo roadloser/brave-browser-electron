@@ -8,7 +8,7 @@ export type FingerprintApi = 'navigator' | 'canvas' | 'audio' | 'webgl' | 'fonts
 export type ExecutionContextKind = 'window' | 'iframe' | 'dedicated-worker' | 'shared-worker' | 'service-worker' | 'worklet';
 export type PrivacyCapability = {
   api: FingerprintApi; context: ExecutionContextKind;
-  status: 'unknown' | 'partial' | 'blocked' | 'verified';
+  status: 'unknown' | 'partial' | 'blocked' | 'verified' | 'not-applicable';
   implemented: boolean; observed: boolean; reason: string; evidenceId?: string;
 };
 export type RuntimeCoverage = {

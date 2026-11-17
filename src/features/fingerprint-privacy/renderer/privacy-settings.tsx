@@ -44,10 +44,15 @@ export function PrivacySettings({ tab }: { tab?: TabSnapshot }) {
         }}><option value="inherit">使用默认策略</option>{modes.map(mode => <option key={mode.value} value={mode.value}>{mode.label}</option>)}</select></label>
         <p>更改后会重新加载相关网页。{tab.isPrivate ? '私密策略和站点 token 不写入普通资料。' : ''}</p></div>}
       <h2>执行上下文与覆盖状态</h2>
+      {state.coverage && state.coverage.length > 0 && <ul className="privacy-coverage">{state.coverage.map(coverage => <li key={coverage.context}>
+        <strong>{contextNames[coverage.context]}</strong>：{coverage.installed ? '已登记局部安装' : '安装失败或无适用API'}；
+        {coverage.firstRead === 'guarded' ? '首读屏障已接线' : coverage.firstRead === 'racy' ? '首读仍有异步竞态' : '首读未知'}；失败 {coverage.failures} 项。
+        <p>{coverage.reason}</p>
+      </li>)}</ul>}
       <table><thead><tr><th>接口</th><th>上下文</th><th>实现</th><th>运行对照</th><th>状态说明</th></tr></thead>
         <tbody>{state.capabilities.map(capability => <tr key={`${capability.api}:${capability.context}`}>
           <td>{apiNames[capability.api]}</td><td>{contextNames[capability.context]}</td>
-          <td>{capability.implemented ? '局部已接入' : '未接入'}</td><td>{capability.observed ? '有记录' : '未观察'}</td>
+          <td>{capability.status === 'not-applicable' ? '无此API' : capability.implemented ? '局部已接入' : '未接入'}</td><td>{capability.status === 'not-applicable' ? '不适用' : capability.observed ? '有记录' : '未观察'}</td>
           <td>{capability.reason}</td>
         </tr>)}</tbody>
       </table>
