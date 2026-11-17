@@ -1,21 +1,20 @@
 import * as Cardano from '@emurgo/cardano-serialization-lib-nodejs';
-import { mnemonicToEntropy } from '@scure/bip39';
-import { wordlist } from '@scure/bip39/wordlists/english.js';
 import type { WalletAccount, WalletNetwork } from '../../../../shared/contracts/wallet';
 import { BrowserError } from '../../../../shared/errors';
 import type { ChainAdapterPort, KeyMaterial, PreparedTransfer, SignedTransfer, TransferIntent } from './adapter';
 import { amountToBase, formatAmount } from './network-client';
 import { CardanoRpc, type CardanoParameters } from './cardano-rpc';
+import { cardanoAccountKey } from './cardano-key';
+import { signCardanoData } from './cardano-cip8';
+import { cardanoQuery, prepareCardanoDapp, signCardanoDapp } from './cardano-dapp';
 
 export class CardanoAdapter implements ChainAdapterPort {
   readonly chain = 'cardano' as const;
   readonly version = 'cardano-serialization-lib-17.0.0/cip1852';
-  readonly capability = { chain: this.chain, account: true, transfer: true, messageSign: true, dapp: false, shielded: false,
-    reason: '按当前 Brave 使用单一外部地址兼作找零；CIP-30 站点协议正在映射' };
+  readonly capability = { chain: this.chain, account: true, transfer: true, messageSign: true, dapp: true, shielded: false,
+    reason: '与当前 Brave 一致：单一外部地址；Reward/Collateral接口未实现' };
   private account(key: KeyMaterial) {
-    const entropy = mnemonicToEntropy(key.mnemonic, wordlist);
-    try { return Cardano.Bip32PrivateKey.from_bip39_entropy(entropy, new Uint8Array()).derive(0x80000000 + 1852).derive(0x80000000 + 1815).derive(0x80000000 + key.index); }
-    finally { entropy.fill(0); }
+    return cardanoAccountKey(key);
   }
   async derive(key: KeyMaterial, network: WalletNetwork) {
     const account = this.account(key);
@@ -65,6 +64,7 @@ export class CardanoAdapter implements ChainAdapterPort {
       details: { recipient: intent.to, value: `${intent.value} ADA`, networkFee: `${fee} ADA`, changeAddress: account.address, network: network.name } };
   }
   async sign(key: KeyMaterial, _network: WalletNetwork, prepared: PreparedTransfer) {
+    if ('transaction' in (prepared.payload as object)) return signCardanoDapp(key, prepared);
     const account = this.account(key);
     try {
       const body = Cardano.TransactionBody.from_hex((prepared.payload as { body: string }).body);
@@ -81,6 +81,9 @@ export class CardanoAdapter implements ChainAdapterPort {
     finally { secret.free(); account.free(); }
   }
   async broadcast(network: WalletNetwork, signed: SignedTransfer) { return new CardanoRpc(network).submit(Buffer.from(signed.payload, 'hex')); }
+  async signBytes(key: KeyMaterial, network: WalletNetwork, message: Uint8Array) { return signCardanoData(key, network, message); }
+  prepareDapp(_key: KeyMaterial, account: WalletAccount, network: WalletNetwork, payload: unknown) { return prepareCardanoDapp(account, network, payload); }
+  providerQuery(account: WalletAccount, network: WalletNetwork, method: string, params: unknown[]) { return cardanoQuery(account, network, method, params); }
   async status(network: WalletNetwork, hash: string) {
     try { await new CardanoRpc(network).json(`txs/${encodeURIComponent(hash)}`); return 'confirmed' as const; }
     catch { return 'unknown' as const; }

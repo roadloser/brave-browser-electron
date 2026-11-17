@@ -11,6 +11,7 @@ import { SyncSettings } from '../features/sync/renderer/sync-settings';
 import { PrivacySettings } from '../features/fingerprint-privacy/renderer/privacy-settings';
 import { RewardsPanel } from '../features/rewards/renderer/rewards-panel';
 import { WalletPage } from '../features/wallet/renderer/wallet-page';
+import { TorPanel } from '../features/tor/renderer/tor-status';
 
 export function renderBrowserPage(url: string, context: { tab: TabSnapshot; window: WindowSnapshot }) {
   if (url === 'brave://newtab' || url === 'brave://newtab/') return <NewTabPage {...context} />;
@@ -19,6 +20,7 @@ export function renderBrowserPage(url: string, context: { tab: TabSnapshot; wind
   if (url === 'brave://settings/privacy' || url === 'brave://privacy') return <PrivacySettings />;
   if (url === 'brave://rewards' || url.startsWith('brave://rewards/')) return <RewardsPanel />;
   if (url === 'brave://wallet' || url.startsWith('brave://wallet/')) return <WalletPage />;
+  if (url === 'brave://tor' || url.startsWith('brave://tor/')) return <TorPanel />;
   if (url === 'brave://settings/sites' || url === 'brave://site-settings') return <SitePermissionPanel />;
   if (url === 'brave://extensions' || url.startsWith('brave://extensions/')) return <ExtensionsPage />;
   if (url === 'brave://bookmarks' || url.startsWith('brave://bookmarks/')) return <BookmarksPage />;

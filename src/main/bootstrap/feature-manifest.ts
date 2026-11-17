@@ -16,6 +16,7 @@ import { syncFeature } from '../../features/sync/main';
 import { fingerprintPrivacyFeature } from '../../features/fingerprint-privacy/main';
 import { rewardsFeature } from '../../features/rewards/main';
 import { walletFeature } from '../../features/wallet/main';
+import { torFeature } from '../../features/tor/main';
 
 export const featureManifest: readonly FeatureDefinition[] = [
   settingsFeature,
@@ -35,4 +36,5 @@ export const featureManifest: readonly FeatureDefinition[] = [
   syncFeature,
   rewardsFeature,
   walletFeature,
+  torFeature,
 ];

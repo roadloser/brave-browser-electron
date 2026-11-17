@@ -11,6 +11,7 @@ import { LeoButton } from '../features/leo/renderer/leo-button';
 import { ShieldsPanel } from '../features/shields/renderer/shields-panel';
 import { TalkButton } from '../features/content-services/renderer/talk-panel';
 import { WalletButton } from '../features/wallet/renderer/wallet-button';
+import { TorButton } from '../features/tor/renderer/tor-status';
 
 function useActiveTab() {
   const snapshot = useBrowserStore(state => state.snapshot);
@@ -42,5 +43,5 @@ export function FeatureNotifications() {
 }
 
 export function FeatureSidebar() {
-  return <TalkButton />;
+  return <><TalkButton /><TorButton /></>;
 }

@@ -36,7 +36,6 @@ export function registerBrowserIpc(runtime: FeatureRuntime): () => void {
     router.handle('browser.windowAction', (payload, context) => core.windowAction(context.windowId, payload.action)),
     core.onEvent(event => {
       if (event.type === 'stateChanged') {
-        runtime.publish('browser.state', event.state, { windowId: event.windowId });
         for (const window of event.state.windows) {
           const contents = window.tabs.map(tab => core.getTabWebContents(tab.id));
           for (const target of contents) {
