@@ -1,9 +1,9 @@
 import type { CanvasContextPort, CanvasFormat, CanvasSource } from './canvas-context-port';
 
-type CanvasContext = { getContextAttributes?: () => { colorSpace?: string; colorType?: string }; drawingBufferColorSpace?: string };
+type CanvasContext = { getContextAttributes?: () => { colorSpace?: string; colorType?: string; alpha?: boolean }; drawingBufferColorSpace?: string };
 
 export class CanvasContextRegistry implements CanvasContextPort {
-  private readonly formats = new WeakMap<CanvasSource, CanvasFormat>();
+  private readonly contexts = new WeakMap<CanvasSource, CanvasContext>();
 
   start() {
     const releases: (() => void)[] = [];
@@ -22,7 +22,7 @@ export class CanvasContextRegistry implements CanvasContextPort {
         ...descriptor,
         value: function(this: CanvasSource, ...args: unknown[]) {
           const context = Reflect.apply(original, this, args) as CanvasContext | null;
-          if (context) registry.record(this, context);
+          if (context) registry.contexts.set(this, context);
           return context;
         },
       });
@@ -31,15 +31,17 @@ export class CanvasContextRegistry implements CanvasContextPort {
     return { dispose: () => releases.reverse().forEach(release => release()), failures };
   }
 
-  format(canvas: CanvasSource): CanvasFormat | null { return this.formats.get(canvas) ?? null; }
-
-  private record(canvas: CanvasSource, context: CanvasContext): void {
-    const attributes = context.getContextAttributes?.();
+  format(canvas: CanvasSource): CanvasFormat | null {
+    const context = this.contexts.get(canvas);
+    if (!context) return null;
+    let attributes: ReturnType<NonNullable<CanvasContext['getContextAttributes']>>;
+    try { attributes = context.getContextAttributes?.() ?? {}; } catch { return null; }
     const colorType = attributes?.colorType ?? 'unorm8';
-    if (!['unorm8', 'float16', 'float32'].includes(colorType)) return;
-    this.formats.set(canvas, {
+    if (!['unorm8', 'float16', 'float32'].includes(colorType)) return null;
+    return {
       colorSpace: attributes?.colorSpace ?? context.drawingBufferColorSpace ?? 'srgb',
       colorType: colorType as CanvasFormat['colorType'],
-    });
+      alpha: attributes?.alpha ?? true,
+    };
   }
 }

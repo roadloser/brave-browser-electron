@@ -5,16 +5,23 @@ type GetImageData = (this: ImageContext, x: number, y: number, width: number, he
 
 export function createCanvasExportAdapter(contexts: CanvasContextPort, farble: (image: ImageData) => ImageData,
   htmlGetImageData?: GetImageData, offscreenGetImageData?: GetImageData) {
-  const settings = (format: CanvasFormat) => ({ colorSpace: format.colorSpace, colorType: format.colorType, alpha: true, willReadFrequently: true });
+  const settings = (format: CanvasFormat) => ({ colorSpace: format.colorSpace, colorType: format.colorType, alpha: format.alpha, willReadFrequently: true });
   const imageSettings = (format: CanvasFormat) => ({
     colorSpace: format.colorSpace,
     pixelFormat: format.colorType === 'unorm8' ? 'rgba-unorm8' : format.colorType === 'float16' ? 'rgba-float16' : 'rgba-float32',
   });
 
   function ensureFormat(context: ImageContext, expected: CanvasFormat): void {
-    const actual = context.getContextAttributes() as { colorSpace?: string; colorType?: string };
-    if (actual.colorSpace !== expected.colorSpace || (actual.colorType ?? 'unorm8') !== expected.colorType) {
+    const actual = context.getContextAttributes() as { colorSpace?: string; colorType?: string; alpha?: boolean };
+    if (actual.colorSpace !== expected.colorSpace || (actual.colorType ?? 'unorm8') !== expected.colorType || (actual.alpha ?? true) !== expected.alpha) {
       throw new DOMException('导出临时画布不支持原色域或像素格式，未静默转换为sRGB', 'NotSupportedError');
+    }
+  }
+
+  function ensureImageData(image: ImageData, format: CanvasFormat): void {
+    const actual = image as ImageData & { pixelFormat?: string; colorSpace?: string };
+    if ((actual.pixelFormat ?? 'rgba-unorm8') !== imageSettings(format).pixelFormat || actual.colorSpace !== format.colorSpace) {
+      throw new DOMException('像素读取未保留要求的色域或精度', 'NotSupportedError');
     }
   }
 
@@ -28,6 +35,7 @@ export function createCanvasExportAdapter(contexts: CanvasContextPort, farble: (
     ensureFormat(context, format);
     context.drawImage(canvas, 0, 0);
     const image = htmlGetImageData.call(context, 0, 0, clone.width, clone.height, imageSettings(format));
+    ensureImageData(image, format);
     context.putImageData(farble(image), 0, 0);
     return clone;
   }
@@ -41,6 +49,7 @@ export function createCanvasExportAdapter(contexts: CanvasContextPort, farble: (
     ensureFormat(context, format);
     context.drawImage(canvas, 0, 0);
     const image = offscreenGetImageData.call(context, 0, 0, clone.width, clone.height, imageSettings(format));
+    ensureImageData(image, format);
     context.putImageData(farble(image), 0, 0);
     return clone;
   }
