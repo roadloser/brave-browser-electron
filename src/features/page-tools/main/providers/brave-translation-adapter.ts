@@ -30,7 +30,7 @@ export class BraveTranslationAdapter implements TranslationAdapterPort {
     const serviceKey = process.env.BRAVE_TRANSLATE_SERVICE_KEY?.trim();
     if (!serviceKey) throw new BrowserError('FORBIDDEN', this.available().reason!, true, { capability: 'official-translation-credentials' });
     const tab = this.runtime.core.getTab(target.tabId);
-    const script = await this.resources.get(this.runtime.core.sessionForContext(tab), signal);
+    const script = await this.resources.get((url, init) => this.runtime.network.fetch(tab, url, { ...init, purpose: 'translation' }), signal);
     if (signal.aborted) throw new BrowserError('CANCELLED', '翻译请求已取消');
     return this.runtime.pages.execute<TranslationRuntimeState>('page-tools.translation.runtime', target, {
       action: 'start', script, apiKey: serviceKey, targetLanguage: language,
