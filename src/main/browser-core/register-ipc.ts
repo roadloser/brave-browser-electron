@@ -1,6 +1,8 @@
 import type { FeatureRuntime } from '../../shared/module-lifecycle';
 import { BrowserError } from '../../shared/errors';
 import { attachBrowserKeyboard } from './keyboard-controller';
+import { registerBrowserActions } from './register-actions-ipc';
+import { attachPageContextMenu } from './context-menu';
 
 export function registerBrowserIpc(runtime: FeatureRuntime): () => void {
   const { router, core } = runtime;
@@ -9,6 +11,7 @@ export function registerBrowserIpc(runtime: FeatureRuntime): () => void {
     if (core.getTab(tabId).windowId !== windowId) throw new BrowserError('FORBIDDEN', '不能操作其他窗口的标签');
   };
   const disposers = [
+    registerBrowserActions(runtime),
     router.handle('browser.getState', (_payload, context) => core.getState(context.windowId)),
     router.handle('browser.createProfile', payload => core.createProfile(payload.name)),
     router.handle('browser.renameProfile', payload => core.renameProfile(payload.profileId, payload.name)),
@@ -38,7 +41,10 @@ export function registerBrowserIpc(runtime: FeatureRuntime): () => void {
           const contents = window.tabs.map(tab => core.getTabWebContents(tab.id));
           for (const target of contents) {
             if (!keyboard.has(target.id)) {
-              keyboard.set(target.id, attachBrowserKeyboard(runtime, window.id, target));
+              const disposeKeyboard = attachBrowserKeyboard(runtime, window.id, target);
+              const tabId = window.tabs.find(tab => core.getTabWebContents(tab.id).id === target.id)!.id;
+              const disposeMenu = attachPageContextMenu(runtime, tabId);
+              keyboard.set(target.id, () => { disposeKeyboard(); disposeMenu(); });
               target.once('destroyed', () => keyboard.delete(target.id));
             }
           }

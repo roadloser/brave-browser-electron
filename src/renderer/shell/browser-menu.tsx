@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { Menu } from '@base-ui/react/menu';
-import { Bookmark, Download, FolderOpen, History, Menu as MenuIcon, Monitor, PanelLeft, Plus, Settings, Undo2, VenetianMask } from 'lucide-react';
+import { Bookmark, Download, FolderOpen, Gift, History, Menu as MenuIcon, Monitor, PanelLeft, Plus, Printer, Puzzle, RefreshCw, Search, Settings, Shield, Undo2, VenetianMask, Wallet } from 'lucide-react';
 import { IconButton } from '../components/icon-button';
 import { useBrowserCommand } from './use-browser-command';
 import { useBrowserStore } from './browser-store';
 import { usePageOverlay } from './use-page-overlay';
+import { ZoomControls } from './zoom-controls';
 
 export function BrowserMenu() {
   const [open, setOpen] = useState(false);
@@ -17,6 +18,11 @@ export function BrowserMenu() {
     { url: 'brave://history', label: '历史记录', icon: History },
     { url: 'brave://downloads', label: '下载内容', icon: Download },
     { url: 'brave://settings', label: '设置', icon: Settings },
+    { url: 'brave://sync', label: '同步', icon: RefreshCw },
+    { url: 'brave://privacy', label: '隐私与安全', icon: Shield },
+    { url: 'brave://extensions', label: '扩展', icon: Puzzle },
+    { url: 'brave://wallet', label: 'Brave Wallet', icon: Wallet },
+    { url: 'brave://rewards', label: 'Brave Rewards', icon: Gift },
   ];
   return (
     <Menu.Root open={open} onOpenChange={setOpen}>
@@ -28,6 +34,10 @@ export function BrowserMenu() {
           <Menu.Item onClick={() => void command('browser.openWindow', { isPrivate: true })}><VenetianMask size={16} />新建私密窗口<kbd>⇧⌘N</kbd></Menu.Item>
           <Menu.Item onClick={() => void command('browser.reopenClosedTab', {})}><Undo2 size={16} />重新打开关闭的标签页</Menu.Item>
           <Menu.Item onClick={() => void command('browser.openFile', {})}><FolderOpen size={16} />打开文件<kbd>⌘O</kbd></Menu.Item>
+          <Menu.Separator className="menu-separator" />
+          <ZoomControls tabId={current?.activeTabId ?? undefined} active={open} />
+          <Menu.Item onClick={() => window.dispatchEvent(new Event('brave:find-page'))}><Search size={16} />在页面中查找<kbd>⌘F</kbd></Menu.Item>
+          <Menu.Item disabled={!current?.activeTabId} onClick={() => current?.activeTabId && void command('browser.print', { tabId: current.activeTabId })}><Printer size={16} />打印<kbd>⌘P</kbd></Menu.Item>
           <Menu.Separator className="menu-separator" />
           {pages.map(({ url, label, icon: Icon }) => (
             <Menu.Item key={url} onClick={() => void command('browser.openTab', { url })}><Icon size={16} />{label}</Menu.Item>

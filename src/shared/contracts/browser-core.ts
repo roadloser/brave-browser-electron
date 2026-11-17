@@ -40,7 +40,8 @@ export type NavigationCommitted = BrowserContext & {
 };
 export type CoreEvent =
   | { type: 'stateChanged'; windowId: string; state: BrowserSnapshot }
-  | { type: 'shortcut'; windowId: string; action: 'focusAddress' }
+  | { type: 'shortcut'; windowId: string; action: 'focusAddress' | 'findInPage' }
+  | { type: 'findResult'; windowId: string; result: import('./browser-actions').FindResult }
   | { type: 'windowReady'; windowId: string; context: BrowserContext }
   | { type: 'navigationCommitted'; visit: NavigationCommitted }
   | { type: 'tabClosed'; context: BrowserContext; windowId: string; tabId: string }

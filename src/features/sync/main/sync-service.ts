@@ -71,7 +71,7 @@ export class SyncService {
     if (previous.encryptedWords && previous.endpoint.replace(/\/$/, '') !== endpoint.href.replace(/\/$/, '')) throw new BrowserError('CONFLICT', '更换同步服务器前请先离开当前同步链');
     const config = {
       ...previous, endpoint: endpoint.href.replace(/\/$/, ''), deviceName: input.deviceName,
-      encryptedServiceKey: input.serviceKey === undefined ? previous.endpoint === input.endpoint ? previous.encryptedServiceKey : undefined : input.serviceKey ? this.runtime.secrets.encrypt(input.serviceKey) : undefined,
+      encryptedServiceKey: input.serviceKey === undefined ? previous.endpoint.replace(/\/$/, '') === endpoint.href.replace(/\/$/, '') ? previous.encryptedServiceKey : undefined : input.serviceKey ? this.runtime.secrets.encrypt(input.serviceKey) : undefined,
       officialStatus: 'unverified' as const, error: undefined,
     };
     this.save(context.profileId, config);
@@ -116,6 +116,7 @@ export class SyncService {
     const current = this.active.get(context.profileId);
     current?.controller.abort(); await current?.promise.catch(() => undefined);
     clearTimeout(this.timers.get(context.profileId)); this.timers.delete(context.profileId);
+    await this.engine.leave(context.profileId, this.configuration(context.profileId), AbortSignal.timeout(30000));
     this.repository.leave(context.profileId);
     this.publish(context.profileId);
     return this.get(context.profileId);

@@ -54,9 +54,9 @@ export function ExtensionsPage() {
       </article>)}</div>}
     {proposal && <InstallConfirmation proposal={proposal} pending={extensions.pending} error={extensions.error} onConfirm={approve => void confirm(approve)} />}
     {removing && <Modal open title={`移除“${removing.name}”？`} className="extension-dialog" onOpenChange={open => { if (!open && !extensions.pending) setRemoving(null); }}>
-      <p>将停止扩展并删除其安装文件。当前版本保留扩展存储数据，便于重新安装恢复。</p>
+      <p>将停止扩展并删除其安装文件。默认保留扩展存储数据，便于重新安装恢复。</p>
       <label><input type="checkbox" checked={clearData} onChange={event => setClearData(event.target.checked)} />同时清除扩展数据</label>
-      {clearData && <p className="extension-warning">当前运行时尚不能保证完整清除chrome.storage。该选择会阻止移除并说明原因，不会伪报清理成功。</p>}
+      {clearData && <p className="extension-warning">将通过扩展自身存储接口清除数据，再清理此扩展来源的网页存储。任一清理步骤失败会停止卸载并保留错误。</p>}
       {extensions.error && <p role="alert">{extensions.error}</p>}
       <footer><button disabled={extensions.pending} onClick={() => setRemoving(null)}>取消</button>
         <button disabled={extensions.pending} onClick={async () => {

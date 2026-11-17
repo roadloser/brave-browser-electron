@@ -9,6 +9,8 @@ import { BraveTokenProvider, type FarblingTokenProviderPort } from './token-prov
 import { resolvePrivacySite } from './site-scope-resolver';
 import { privacyCapabilities } from './capability-registry';
 import type { FramePrivacyPolicy } from '../runtime/protocol';
+import { CdpPrivacyContextAdapter } from '../runtime/cdp-context-adapter';
+import type { ExecutionContextKind } from '../../../shared/contracts/fingerprint-privacy';
 
 export class PrivacyService {
   private readonly tokens: FarblingTokenProviderPort;
@@ -16,6 +18,9 @@ export class PrivacyService {
   private readonly sessions = new Map<Session, { id: string; contextId: string }>();
   private readonly tabs = new Map<string, TabSnapshot>();
   private readonly stopCore;
+  private readonly stopPreparation;
+  private readonly cdpContexts = new Map<string, CdpPrivacyContextAdapter>();
+  private readonly cdpOutcomes = new Map<string, Map<ExecutionContextKind, { applied: boolean; reason: string }>>();
   private readonly generation = Date.now();
   private revision = 0;
 
@@ -24,7 +29,10 @@ export class PrivacyService {
     this.stopCore = runtime.core.onEvent(event => {
       if (event.type === 'sessionCreated') this.attach(event.context);
       if (event.type === 'stateChanged') this.acceptState(event.state);
-      if (event.type === 'tabClosed') this.tabs.delete(event.tabId);
+      if (event.type === 'tabClosed') {
+        this.tabs.delete(event.tabId);
+        this.cdpContexts.get(event.tabId)?.dispose(); this.cdpContexts.delete(event.tabId); this.cdpOutcomes.delete(event.tabId);
+      }
       if (event.type === 'contextDisposed' && event.context.isPrivate) {
         this.privateModes.delete(event.context.contextId); this.tokens.release(event.context.contextId);
         for (const [tabId, tab] of this.tabs) if (tab.contextId === event.context.contextId) this.tabs.delete(tabId);
@@ -33,6 +41,7 @@ export class PrivacyService {
         }
       }
     });
+    this.stopPreparation = runtime.core.registerBeforeNavigate('fingerprint-context', tab => this.prepareContext(tab));
   }
 
   start(): void {
@@ -46,7 +55,7 @@ export class PrivacyService {
   get(context: CommandContext, tabId?: string): PrivacyState {
     const tab = tabId ? this.runtime.core.getTab(tabId) : undefined;
     if (tab && (tab.windowId !== context.windowId || tab.contextId !== context.contextId)) throw new BrowserError('FORBIDDEN', '不能读取其他窗口的隐私策略');
-    return this.state(context, tab?.url);
+    return this.state(context, tab?.url, tab?.id);
   }
 
   setDefault(context: CommandContext, mode: PrivacyMode): PrivacyState {
@@ -85,12 +94,14 @@ export class PrivacyService {
   }
 
   dispose(): void {
-    this.stopCore();
+    this.stopCore(); this.stopPreparation();
+    for (const adapter of this.cdpContexts.values()) adapter.dispose();
+    this.cdpContexts.clear(); this.cdpOutcomes.clear();
     for (const [session, preload] of this.sessions) session.unregisterPreloadScript(preload.id);
     this.sessions.clear(); this.tokens.dispose(); this.privateModes.clear(); this.tabs.clear();
   }
 
-  private state(context: BrowserContext, url?: string): PrivacyState {
+  private state(context: BrowserContext, url?: string, tabId?: string): PrivacyState {
     const site = url ? resolvePrivacySite(url) : null;
     const repository = this.repository(context.profileId);
     const privateSettings = context.isPrivate ? this.privateModes.get(context.contextId) : undefined;
@@ -98,7 +109,11 @@ export class PrivacyService {
     const siteMode = site ? context.isPrivate ? privateSettings?.sites.get(site) : repository.siteMode(site) : undefined;
     return {
       mode: siteMode ?? defaultMode, defaultMode, site, inherited: siteMode === undefined,
-      runtimeVersion: 'electron43-brave-audio-v1', capabilities: privacyCapabilities(),
+      runtimeVersion: 'electron43-chromium150-brave-audio-v2', capabilities: privacyCapabilities().map(capability => {
+        const outcome = tabId ? this.cdpOutcomes.get(tabId)?.get(capability.context) : undefined;
+        if (capability.api !== 'audio' || !outcome) return capability;
+        return { ...capability, status: outcome.applied ? 'partial' : 'blocked', implemented: outcome.applied, observed: false, reason: outcome.reason };
+      }),
       scope: site ? { profileId: context.profileId, contextId: context.contextId, site, generation: this.generation } : null,
       revision: this.revision + repository.state().revision,
     };
@@ -132,8 +147,38 @@ export class PrivacyService {
     for (const tab of this.tabs.values()) {
       if (tab.profileId !== context.profileId || (context.isPrivate && tab.contextId !== context.contextId)) continue;
       if (site && resolvePrivacySite(tab.url) !== site) continue;
-      this.runtime.publish('privacy.changed', this.state(tab, tab.url), { windowId: tab.windowId });
+      this.runtime.publish('privacy.changed', this.state(tab, tab.url, tab.id), { windowId: tab.windowId });
+      if (this.cdpContexts.has(tab.id) && this.effectiveMode(tab, resolvePrivacySite(tab.url) ?? '') === 'off') {
+        this.cdpContexts.get(tab.id)?.dispose(); this.cdpContexts.delete(tab.id);
+      } else if (!this.cdpContexts.has(tab.id)) void this.prepareContext(tab);
       this.runtime.core.reload(tab.id);
+    }
+  }
+
+  private async prepareContext(tab: TabSnapshot): Promise<void> {
+    const site = resolvePrivacySite(tab.url);
+    if (!site || this.effectiveMode(tab, site) === 'off') return;
+    if (this.cdpContexts.has(tab.id)) return;
+    const adapter = new CdpPrivacyContextAdapter(tab, this.runtime.debugger, scope => {
+      const sourceSite = resolvePrivacySite(scope.origin);
+      if (!sourceSite || scope.nonce) return { mode: 'off', token: null, scope: sourceSite };
+      const mode = this.effectiveMode(tab, sourceSite);
+      if (mode === 'off') return { mode, token: null, scope: sourceSite };
+      const token = this.tokens.forSite(tab, sourceSite);
+      return { mode, token: { high: token.high, low: token.low }, scope: sourceSite };
+    }, outcome => {
+      const outcomes = this.cdpOutcomes.get(tab.id) ?? new Map();
+      outcomes.set(outcome.context, outcome); this.cdpOutcomes.set(tab.id, outcomes);
+      this.revision++;
+      this.runtime.publish('privacy.changed', this.state(tab, tab.url, tab.id), { windowId: tab.windowId });
+    });
+    try { await adapter.start(); this.cdpContexts.set(tab.id, adapter); }
+    catch (error) {
+      adapter.dispose();
+      const outcomes = this.cdpOutcomes.get(tab.id) ?? new Map();
+      outcomes.set('iframe', { applied: false, reason: error instanceof Error ? error.message : 'CDP准备失败' });
+      this.cdpOutcomes.set(tab.id, outcomes);
+      this.runtime.publish('privacy.changed', this.state(tab, tab.url, tab.id), { windowId: tab.windowId });
     }
   }
 }

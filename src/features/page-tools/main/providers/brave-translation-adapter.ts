@@ -17,7 +17,7 @@ export class BraveTranslationAdapter implements TranslationAdapterPort {
   private readonly releases: Array<() => void>;
   constructor(private readonly runtime: FeatureRuntime) {
     this.releases = [
-      runtime.pages.register('page-tools.translation', { world: 'translation', source: translationRuntimeSource }),
+      runtime.pages.register('page-tools.translation.runtime', { world: 'translation', source: translationRuntimeSource }),
       runtime.core.onEvent((event) => { if (event.type === 'sessionCreated') this.registerSession(event.context); }),
     ];
     for (const context of runtime.core.getContexts()) this.registerSession(context);
@@ -32,15 +32,15 @@ export class BraveTranslationAdapter implements TranslationAdapterPort {
     const tab = this.runtime.core.getTab(target.tabId);
     const script = await this.resources.get(this.runtime.core.sessionForContext(tab), signal);
     if (signal.aborted) throw new BrowserError('CANCELLED', '翻译请求已取消');
-    return this.runtime.pages.execute<TranslationRuntimeState>('page-tools.translation', target, {
+    return this.runtime.pages.execute<TranslationRuntimeState>('page-tools.translation.runtime', target, {
       action: 'start', script, apiKey: serviceKey, targetLanguage: language,
     });
   }
   state(target: PageTarget) {
-    return this.runtime.pages.execute<TranslationRuntimeState | null>('page-tools.translation', target, { action: 'status' });
+    return this.runtime.pages.execute<TranslationRuntimeState | null>('page-tools.translation.runtime', target, { action: 'status' });
   }
   async restore(target: PageTarget, cancel: boolean) {
-    await this.runtime.pages.execute('page-tools.translation', target, { action: cancel ? 'cancel' : 'undo' });
+    await this.runtime.pages.execute('page-tools.translation.runtime', target, { action: cancel ? 'cancel' : 'undo' });
   }
   dispose() {
     this.releases.forEach((release) => release());

@@ -14,6 +14,11 @@ export function attachBrowserKeyboard(runtime: FeatureRuntime, windowId: string,
     if (modifier && key === 't') action = input.shift ? () => runtime.core.reopenClosedTab(windowId) : () => runtime.core.openTab({ windowId });
     if (modifier && key === 'n') action = () => runtime.core.openWindow({ profileId: window.profileId, isPrivate: input.shift });
     if (modifier && key === 'o') action = () => runtime.core.openFile(windowId);
+    if (modifier && key === 'f') action = () => runtime.publish('browser.shortcut', { action: 'findInPage' }, { windowId });
+    if (modifier && key === 'p' && tabId) action = () => runtime.core.print(tabId);
+    if (modifier && ['+', '='].includes(key) && tabId) action = () => runtime.core.zoom(tabId, 'in');
+    if (modifier && key === '-' && tabId) action = () => runtime.core.zoom(tabId, 'out');
+    if (modifier && key === '0' && tabId) action = () => runtime.core.zoom(tabId, 'reset');
     if (modifier && key === 'w' && tabId) action = () => runtime.core.closeTab(tabId);
     if (modifier && key === 'r' && tabId) action = () => runtime.core.reload(tabId, input.shift);
     if (input.alt && key === 'arrowleft' && tabId) action = () => runtime.core.goBack(tabId);

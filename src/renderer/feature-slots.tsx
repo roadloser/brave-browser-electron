@@ -10,6 +10,7 @@ import { ExtensionActions } from '../features/extensions/renderer/extension-acti
 import { LeoButton } from '../features/leo/renderer/leo-button';
 import { ShieldsPanel } from '../features/shields/renderer/shields-panel';
 import { TalkButton } from '../features/content-services/renderer/talk-panel';
+import { WalletButton } from '../features/wallet/renderer/wallet-button';
 
 function useActiveTab() {
   const snapshot = useBrowserStore(state => state.snapshot);
@@ -27,7 +28,7 @@ export function FeatureToolbar() {
     <PageToolsToolbar tab={tab} />
     {tab && <ExtensionActions tab={tab} />}
     <LeoButton tab={tab} />
-    <TalkButton />
+    <WalletButton tab={tab} />
   </>;
 }
 
@@ -38,4 +39,8 @@ export function FeatureBookmarksBar() {
 
 export function FeatureNotifications() {
   return <><PermissionNotifications /><CredentialNotifications /></>;
+}
+
+export function FeatureSidebar() {
+  return <TalkButton />;
 }

@@ -7,6 +7,7 @@ import { IpcRouter } from '../ipc/router';
 import { createEventPublisher } from '../ipc/event-publisher';
 import { mapError } from '../ipc/error-mapper';
 import { PageScriptHost } from '../platform/runtime/page-script-host';
+import { DebuggerHost } from '../platform/runtime/debugger-host';
 import { SecretStore } from '../platform/credentials/secret-store';
 import { NetworkPolicyCoordinator } from '../platform/network/request-policy';
 import { ElectronRequestHost } from '../platform/network/electron-request-host';
@@ -22,6 +23,7 @@ export class AppRuntime {
   private storage?: SqliteStorageHost;
   private router?: IpcRouter;
   private pages?: PageScriptHost;
+  private debuggerHost?: DebuggerHost;
   private features: FeatureRegistration[] = [];
   private subscriptions: Dispose[] = [];
   private disposed = false;
@@ -60,8 +62,11 @@ export class AppRuntime {
     const pages = new PageScriptHost(core);
     this.pages = pages;
     const policies = new NetworkPolicyCoordinator();
+    const debuggerHost = new DebuggerHost(core);
+    this.debuggerHost = debuggerHost;
     const runtime: FeatureRuntime = {
       core, storage, router, publish, pages, syncData: new SyncDataCoordinator(),
+      debugger: debuggerHost,
       syncTabs: {
         snapshot: profileId => core.getSyncTabs(profileId),
         subscribe: listener => core.onEvent(event => {
@@ -85,6 +90,7 @@ export class AppRuntime {
       if (event.type === 'sessionCreated') policies.select(core.sessionForContext(event.context), 'native-shields', 'D-003');
       if (event.type === 'stateChanged') publish('browser.state', event.state, { windowId: event.windowId });
       if (event.type === 'shortcut') publish('browser.shortcut', { action: event.action }, { windowId: event.windowId });
+      if (event.type === 'findResult') publish('browser.findResult', event.result, { windowId: event.windowId });
     }));
     for (const definition of featureManifest) this.features.push(await definition.register(runtime));
     await core.restore();
@@ -114,6 +120,7 @@ export class AppRuntime {
     }
     this.subscriptions = [];
     try { this.pages?.dispose(); } catch (error) { errors.push(error); }
+    try { this.debuggerHost?.dispose(); } catch (error) { errors.push(error); }
     try { await this.core?.dispose(); } catch (error) { errors.push(error); }
     try { this.router?.dispose(); } catch (error) { errors.push(error); }
     try { this.storage?.close(); } catch (error) { errors.push(error); }

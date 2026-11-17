@@ -13,6 +13,7 @@ import { ContentViewport } from './content-viewport';
 import { Sidebar } from './sidebar';
 import { SplitControls } from './split-controls';
 import { useShellSettings } from './use-shell-settings';
+import { FindBar } from './find-bar';
 import '../styles/tokens.css';
 import '../styles/theme.css';
 import '../styles/shell.css';
@@ -55,6 +56,7 @@ export function BrowserShell({ renderPage, toolbarSlots, sidebarSlots, bookmarks
         {currentWindow.layout.verticalTabs && <VerticalTabStrip currentWindow={currentWindow} groups={groups} />}
         <div className="browser-content-stack">
           <SplitControls currentWindow={currentWindow} />
+          <FindBar tab={tab} />
           <ContentViewport currentWindow={currentWindow} internal={internal || Boolean(tab?.error || tab?.crashed)}>
             {tab && internal ? renderPage(tab.url, { window: currentWindow, tab }) : null}
             {tab?.error && <div className="navigation-error"><ErrorNotice message={tab.error} /></div>}

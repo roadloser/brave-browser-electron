@@ -17,9 +17,15 @@ export class DebuggerSession {
     } catch (error) { this.dispose(); throw error; }
   }
 
-  send<Result>(method: string, parameters?: Record<string, unknown>): Promise<Result> {
+  send<Result>(method: string, parameters?: Record<string, unknown>, sessionId?: string): Promise<Result> {
     if (!this.attached || this.contents.isDestroyed()) throw new BrowserError('UNAVAILABLE', '调试器会话不可用');
-    return this.contents.debugger.sendCommand(method, parameters) as Promise<Result>;
+    return this.contents.debugger.sendCommand(method, parameters, sessionId) as Promise<Result>;
+  }
+
+  onMessage(listener: (method: string, parameters: Record<string, unknown>, sessionId?: string) => void): () => void {
+    const handler = (_event: Electron.Event, method: string, parameters: Record<string, unknown>, sessionId?: string) => listener(method, parameters, sessionId);
+    this.contents.debugger.on('message', handler);
+    return () => { if (!this.contents.isDestroyed()) this.contents.debugger.removeListener('message', handler); };
   }
 
   dispose(): void {

@@ -55,6 +55,7 @@ export class TabManager {
     this.changed(window);
     try {
       if (saved?.entries.length) {
+        await this.navigation.prepare(tab);
         await view.webContents.navigationHistory.restore({ entries: saved.entries, index: Math.min(saved.activeIndex, saved.entries.length - 1) });
       } else await this.navigation.navigate(tab, snapshot.url);
     } catch (error) {

@@ -6,6 +6,7 @@ import type { WalletAccount, WalletNetwork } from '../../../../shared/contracts/
 import { BrowserError } from '../../../../shared/errors';
 import { amountToBase, formatAmount } from './network-client';
 import type { ChainAdapterPort, KeyMaterial, PreparedTransfer, SignedTransfer, TransferIntent } from './adapter';
+import { prepareSolanaDapp } from './solana-dapp';
 
 export class SolanaAdapter implements ChainAdapterPort {
   readonly chain = 'solana' as const;
@@ -36,17 +37,26 @@ export class SolanaAdapter implements ChainAdapterPort {
   async sign(key: KeyMaterial, _network: WalletNetwork, prepared: PreparedTransfer) {
     const pair = this.pair(key);
     try {
-      const data = prepared.payload as { transaction: string };
+      const data = prepared.payload as { transaction: string; versioned?: boolean };
+      if (data.versioned) {
+        const transaction = VersionedTransaction.deserialize(Buffer.from(data.transaction, 'base64'));
+        transaction.sign([pair]);
+        return { payload: Buffer.from(transaction.serialize()).toString('base64') };
+      }
       const transaction = Transaction.from(Buffer.from(data.transaction, 'base64'));
       transaction.sign(pair);
       return { payload: transaction.serialize().toString('base64') };
     } finally { pair.secretKey.fill(0); }
   }
   async signMessage(key: KeyMaterial, _network: WalletNetwork, message: string) {
+    return this.signBytes(key, _network, Buffer.from(message, 'utf8'));
+  }
+  async signBytes(key: KeyMaterial, _network: WalletNetwork, message: Uint8Array) {
     const pair = this.pair(key);
-    try { return Buffer.from(nacl.sign.detached(Buffer.from(message, 'utf8'), pair.secretKey)).toString('base64'); }
+    try { return Buffer.from(nacl.sign.detached(message, pair.secretKey)).toString('base64'); }
     finally { pair.secretKey.fill(0); }
   }
+  prepareDapp(_key: KeyMaterial, account: WalletAccount, network: WalletNetwork, payload: unknown) { return prepareSolanaDapp(account, network, payload); }
   async broadcast(network: WalletNetwork, signed: SignedTransfer) {
     return new Connection(network.rpcUrl, 'confirmed').sendRawTransaction(Buffer.from(signed.payload, 'base64'), { skipPreflight: false });
   }

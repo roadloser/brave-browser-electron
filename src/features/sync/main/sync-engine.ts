@@ -65,6 +65,23 @@ export class SyncEngine {
     } finally { nigori.dispose(); }
   }
 
+  async leave(profileId: string, configuration: SyncConfiguration, signal: AbortSignal): Promise<void> {
+    const device = this.repository.metadata<SyncEntity>(profileId, 'device');
+    const sessions = Object.values(this.repository.metadata<Record<string, SyncEntity>>(profileId, 'own-sessions') ?? {});
+    const entities = [...sessions, ...(device ? [device] : [])];
+    if (!entities.length || !configuration.encryptedWords) return;
+    const context: SyncRequestContext = {
+      words: this.runtime.secrets.decrypt(configuration.encryptedWords),
+      endpoint: configuration.endpoint, serviceKey: configuration.encryptedServiceKey ? this.runtime.secrets.decrypt(configuration.encryptedServiceKey) : undefined,
+      deviceId: configuration.deviceId, birthday: this.repository.metadata<string>(profileId, 'birthday'),
+      chips: this.repository.metadata<string>(profileId, 'chips'), signal,
+    };
+    for (let offset = 0; offset < entities.length; offset += 100) {
+      const batch = entities.slice(offset, offset + 100).map(entity => ({ ...entity, deleted: true }));
+      assertCommitted(await this.protocol.commit(context, batch, [154522, 50119]), batch.length);
+    }
+  }
+
   private async registerDevice(profileId: string, configuration: SyncConfiguration, context: SyncRequestContext, nigori: NigoriController, ids: number[]): Promise<void> {
     const previous = this.repository.metadata<SyncEntity>(profileId, 'device');
     const entity: SyncEntity = {

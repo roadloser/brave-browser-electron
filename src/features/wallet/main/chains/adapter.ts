@@ -16,6 +16,8 @@ export interface ChainAdapterPort {
   prepare(key: KeyMaterial, account: WalletAccount, network: WalletNetwork, intent: TransferIntent): Promise<PreparedTransfer>;
   sign(key: KeyMaterial, network: WalletNetwork, prepared: PreparedTransfer): Promise<SignedTransfer>;
   signMessage(key: KeyMaterial, network: WalletNetwork, message: string): Promise<string>;
+  signBytes?(key: KeyMaterial, network: WalletNetwork, message: Uint8Array): Promise<string>;
+  prepareDapp?(key: KeyMaterial, account: WalletAccount, network: WalletNetwork, payload: unknown): Promise<PreparedTransfer>;
   broadcast(network: WalletNetwork, signed: SignedTransfer): Promise<string>;
   status(network: WalletNetwork, hash: string): Promise<'pending' | 'confirmed' | 'failed' | 'unknown'>;
   dispose(): void | Promise<void>;

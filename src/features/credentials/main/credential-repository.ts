@@ -14,7 +14,8 @@ export class CredentialRepository {
       .map(row => ({ id: row.id, origin: row.origin, username: row.username, encryptedPassword: row.encrypted_password, encryptedSyncMetadata: row.encrypted_sync_metadata ?? undefined, createdAt: row.created_at, updatedAt: row.updated_at }));
   }
   save(profileId: string, origin: string, username: string, encryptedPassword: string): void {
-    const now = Date.now();
+    const previous = this.list(profileId).find(entry => entry.origin === origin && entry.username === username);
+    const now = Math.max(Date.now(), (previous?.updatedAt ?? 0) + 1);
     this.storage.open(profileId).transaction(() => this.storage.open(profileId).run('INSERT INTO credentials(id,origin,username,encrypted_password,created_at,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(origin,username) DO UPDATE SET encrypted_password=excluded.encrypted_password,updated_at=excluded.updated_at',
       [randomUUID(), origin, username, encryptedPassword, now, now]));
   }

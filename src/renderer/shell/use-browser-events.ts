@@ -11,6 +11,7 @@ export function useBrowserEvents() {
       disposers.push(browserClient.on('browser.state', store.acceptSnapshot));
       disposers.push(browserClient.on('browser.shortcut', (shortcut) => {
         if (shortcut.action === 'focusAddress') window.dispatchEvent(new Event('brave:focus-address'));
+        if (shortcut.action === 'findInPage') window.dispatchEvent(new Event('brave:find-page'));
       }));
       disposers.push(browserClient.on('app.error', (error) => store.reportError(error.message)));
       browserClient.command('browser.getState', {})

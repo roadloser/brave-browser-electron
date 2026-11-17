@@ -24,5 +24,5 @@ export function parseChainCode(code: string, now = Date.now()): string {
 export function displayChainCode(words: string, now = Date.now()): SyncCode {
   chainEntropy(words);
   const roundedDay = Math.round((now - epoch) / day);
-  return { code: words + ' ' + wordlist[roundedDay % 2048], expiresAt: epoch + (roundedDay + 1.5) * day };
+  return { code: words + ' ' + wordlist[roundedDay % 2048], expiresAt: epoch + (roundedDay % 2048 === 2047 ? roundedDay + 0.5 : roundedDay + 1.5) * day };
 }

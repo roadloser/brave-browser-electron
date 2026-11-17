@@ -1,6 +1,6 @@
 import type { BrowserContext } from './contracts/browser-core';
 import type { BrowserEvents, CommandName, CommandPayload, CommandResults, Dispose, EventName } from './contracts/envelope';
-import type { BrowserCorePort, Migration, PageScriptPort, RequestHostPort, SecretStorePort, StorageHost } from './runtime-ports';
+import type { BrowserCorePort, DebuggerHostPort, Migration, PageScriptPort, RequestHostPort, SecretStorePort, StorageHost } from './runtime-ports';
 import type { SyncDataPort, SyncTabsPort } from './sync-data-ports';
 
 export type CommandContext = BrowserContext & { windowId: string; requestId: string };
@@ -18,6 +18,7 @@ export interface FeatureRuntime {
   syncData: SyncDataPort;
   syncTabs: SyncTabsPort;
   pages: PageScriptPort;
+  debugger: DebuggerHostPort;
   secrets: SecretStorePort;
   requests: RequestHostPort;
   assets: { credentialPreloadPath: string; translationPreloadPath: string; shieldsPreloadPath: string; privacyPreloadPath: string; walletPreloadPath: string };

@@ -1,13 +1,17 @@
 import { randomUUID } from 'node:crypto';
 import type { NavigationCommitted } from '../../shared/contracts/browser-core';
+import type { FindResult } from '../../shared/contracts/browser-actions';
 import type { TabRecord } from './core-state';
 import { logicalUrl, nativeUrl, normalizeNavigation, isInternalPage } from './internal-pages';
+import type { NavigationPreparation } from './navigation-preparation';
 
 export class NavigationController {
   constructor(
     private readonly changed: (tab: TabRecord) => void,
     private readonly committed: (visit: NavigationCommitted) => void,
     private readonly searchEngine: (profileId: string) => string,
+    private readonly findResult: (windowId: string, result: FindResult) => void,
+    private readonly preparation: NavigationPreparation,
   ) {}
 
   bind(tab: TabRecord): () => void {
@@ -48,8 +52,12 @@ export class NavigationController {
       update();
     };
     const gone = () => { tab.snapshot.crashed = true; tab.snapshot.loading = false; update(); };
+    const found = (_event: Electron.Event, result: Electron.Result) => this.findResult(tab.snapshot.windowId, {
+      tabId: tab.snapshot.id, requestId: result.requestId, matches: result.matches,
+      activeMatchOrdinal: result.activeMatchOrdinal, finalUpdate: result.finalUpdate,
+    });
     const willNavigate = (event: Electron.Event, url: string) => {
-      if (!/^https?:/i.test(url) && url !== 'about:blank' && !tab.allowedFiles.has(url)) event.preventDefault();
+      if (!/^https?:/i.test(url) && url !== 'about:blank') event.preventDefault();
     };
     contents.on('did-navigate', navigated);
     contents.on('did-navigate-in-page', inPage);
@@ -58,6 +66,7 @@ export class NavigationController {
     contents.on('did-fail-load', failed);
     contents.on('render-process-gone', gone);
     contents.on('will-navigate', willNavigate);
+    contents.on('found-in-page', found);
     for (const event of ['did-start-loading', 'did-stop-loading', 'media-started-playing', 'media-paused'] as const) contents.on(event, update);
     return () => {
       contents.removeListener('did-navigate', navigated);
@@ -67,6 +76,7 @@ export class NavigationController {
       contents.removeListener('did-fail-load', failed);
       contents.removeListener('render-process-gone', gone);
       contents.removeListener('will-navigate', willNavigate);
+      contents.removeListener('found-in-page', found);
       for (const event of ['did-start-loading', 'did-stop-loading', 'media-started-playing', 'media-paused'] as const) contents.removeListener(event, update);
     };
   }
@@ -78,6 +88,7 @@ export class NavigationController {
     tab.snapshot.error = undefined;
     tab.snapshot.title = isInternalPage(url) ? (url === 'brave://newtab' ? '新标签页' : url) : url;
     this.changed(tab);
+    await this.preparation.prepare(tab.snapshot);
     try { await tab.view.webContents.loadURL(nativeUrl(url)); }
     catch (error) {
       if (error instanceof Error && error.message.includes('ERR_ABORTED')) return;
@@ -93,6 +104,8 @@ export class NavigationController {
     tab.snapshot.title = decodeURIComponent(new URL(url).pathname.split('/').at(-1) ?? '本地文件');
     tab.snapshot.error = undefined;
     this.changed(tab);
+    await this.preparation.prepare(tab.snapshot);
     await tab.view.webContents.loadURL(url);
   }
+  async prepare(tab: TabRecord): Promise<void> { await this.preparation.prepare(tab.snapshot); }
 }

@@ -6,6 +6,9 @@ ipcRenderer.on('brave:credentials:document-token', (_event, token: unknown) => {
   if (typeof token === 'string') documentToken = token;
 });
 window.addEventListener('DOMContentLoaded', () => ipcRenderer.send('brave:credentials:document'), { once: true });
+window.addEventListener('pageshow', () => ipcRenderer.send('brave:credentials:document'));
+window.addEventListener('hashchange', () => ipcRenderer.send('brave:credentials:document'));
+window.addEventListener('popstate', () => ipcRenderer.send('brave:credentials:document'));
 window.addEventListener('submit', event => {
   if (!documentToken || !event.isTrusted || !(event.target instanceof HTMLFormElement)) return;
   const form = event.target;

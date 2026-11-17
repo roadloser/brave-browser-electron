@@ -9,11 +9,11 @@ export function privacyCapabilities(): PrivacyCapability[] {
     const reason = audioFrame
       ? '已按 Brave token 与音频公式接入 AudioBuffer.getChannelData/copyFromChannel；JS覆写可探测，分析器与其余音频输出未覆盖，尚未运行对照'
       : context === 'iframe'
-        ? 'Electron有frame preload入口，但StorageKey nonce/credentialless作用域未取得稳定入口，当前不注入'
+        ? '已接固定CDP真实StorageKey与Audio两API；nonce尚未映射FastHash，首读时序未观察，运行状态按当前标签报告'
         : context === 'service-worker'
-          ? 'Electron有service-worker preload；主worker token与同步早期初始化尚未建立，不以frame成功推导'
+          ? '已接Target自动附加/真实StorageKey/最终恢复；AudioBuffer不一定存在，其他worker API尚未实现'
           : context === 'dedicated-worker' || context === 'shared-worker' || context === 'worklet'
-            ? '需要固定当前Electron实际CDP/上下文创建时序，尚无完整入口证据'
+            ? context === 'worklet' ? 'Worklet未提供与Target worker相同覆盖保证，不推导已接入' : '已接固定CDP Target自动附加/StorageKey/finally恢复；目标API与首次读取未观察'
             : api === 'navigator'
               ? 'Brave使用Abseil Randen PRNG，未采用随机替代；待成熟同算法实现'
               : 'Brave在Blink产出时介入；当前TS页面入口不足以证明相同生成时机和算法覆盖';

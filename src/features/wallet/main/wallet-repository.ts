@@ -6,7 +6,7 @@ export type VaultRecord = { version: 1; salt: string; iv: string; tag: string; c
 export type WalletDocument = {
   vault?: VaultRecord; accounts: WalletAccount[]; networks: WalletNetwork[]; selectedAccountId?: string;
   requests: WalletRequest[]; transactions: WalletTransaction[]; grants: Record<string, string[]>;
-  pending: Record<string, { prepared?: PreparedTransfer; message?: string; providerMethod?: string; providerPayload?: unknown }>;
+  pending: Record<string, { prepared?: PreparedTransfer; message?: string; messageBase64?: string; providerMethod?: string; providerPayload?: unknown }>;
   revision: number;
 };
 export const walletMigrations: readonly Migration[] = [{

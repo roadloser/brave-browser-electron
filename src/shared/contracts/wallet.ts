@@ -46,6 +46,7 @@ export const walletCommandSchemas = {
   'wallet.selectAccount': z.object({ id: idSchema }),
   'wallet.addNetwork': walletNetworkSchema,
   'wallet.requestTransfer': z.object({ accountId: idSchema, to: z.string().trim().min(1).max(2048), value: z.string().regex(/^\d+(?:\.\d+)?$/).max(128) }),
+  'wallet.requestDappTransaction': z.object({ accountId: idSchema, payload: z.string().min(1).max(500000) }),
   'wallet.requestSign': z.object({ accountId: idSchema, message: z.string().min(1).max(100000) }),
   'wallet.approve': z.object({ id: idSchema, confirmed: z.literal(true) }),
   'wallet.reject': z.object({ id: idSchema }),
@@ -64,6 +65,7 @@ export interface WalletCommandResults {
   'wallet.selectAccount': WalletState;
   'wallet.addNetwork': WalletState;
   'wallet.requestTransfer': WalletState;
+  'wallet.requestDappTransaction': WalletState;
   'wallet.requestSign': WalletState;
   'wallet.approve': WalletState;
   'wallet.reject': WalletState;

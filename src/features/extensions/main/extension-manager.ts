@@ -12,6 +12,7 @@ import { ExtensionPopupController } from './popup-controller';
 import { ExtensionVersionInstaller } from './version-installer';
 import type { ExtensionLibraryPort } from './library-port';
 import { ChromeWebStoreAdapter } from './web-store-adapter';
+import { ChromeStorePageAdapter } from './store-page-adapter';
 
 export class ExtensionManager {
   private readonly proposals;
@@ -19,6 +20,7 @@ export class ExtensionManager {
   private readonly adapters = new Map<string, ExtensionLibraryPort>();
   private readonly starting = new Map<string, Promise<void>>();
   private readonly queues = new Map<string, Promise<unknown>>();
+  private readonly storePages = new Map<string, ChromeStorePageAdapter>();
   private readonly stopCore;
   private latestState?: BrowserSnapshot;
   private readonly knownWindows = new Map<string, BrowserSnapshot['windows'][number]>();
@@ -136,10 +138,10 @@ export class ExtensionManager {
 
   async remove(context: CommandContext, id: string, clearData = false) {
     this.regular(context); await this.ensure(context);
-    if (clearData) throw new BrowserError('UNAVAILABLE', '当前运行时尚不能保证完整清除chrome.storage扩展数据；可选择保留数据后移除，不会伪报已擦除');
     return this.enqueue(context.profileId, async () => {
       const extension = this.required(context.profileId, id);
       this.popup.closeExtension(id);
+      if (clearData) await this.runtime.core.clearExtensionStorage(context.windowId, id);
       this.runtime.core.sessionForContext(context).extensions.removeExtension(id);
       this.repository(context.profileId).remove(id);
       await rm(dirname(extension.path), { recursive: true, force: true }).catch(() => {
@@ -165,6 +167,8 @@ export class ExtensionManager {
     this.popup.dispose();
     await Promise.allSettled([...this.queues.values(), ...this.starting.values()]);
     for (const adapter of this.adapters.values()) adapter.dispose();
+    for (const page of this.storePages.values()) page.dispose();
+    this.storePages.clear();
     this.adapters.clear();
     await this.proposals.dispose();
   }
@@ -194,6 +198,14 @@ export class ExtensionManager {
       } catch {
         repository.save({ ...extension, status: 'failed', error: '扩展恢复失败，请重新加载或更新；原文件已保留' });
       }
+    }
+    const storePage = new ChromeStorePageAdapter(this.runtime, context, () => { this.changed(context.profileId); });
+    try {
+      await storePage.install();
+      this.storePages.set(context.profileId, storePage);
+    } catch (error) {
+      storePage.dispose();
+      this.report(context.profileId, new Error(`Chrome商店页面接线失败，已保留本地扩展管理：${error instanceof Error ? error.message : 'unknown'}`));
     }
     this.changed(context.profileId);
   }

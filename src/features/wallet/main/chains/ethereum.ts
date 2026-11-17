@@ -2,6 +2,7 @@ import { HDNodeWallet, JsonRpcProvider, getAddress, formatUnits, parseUnits, typ
 import type { WalletAccount, WalletNetwork } from '../../../../shared/contracts/wallet';
 import { BrowserError } from '../../../../shared/errors';
 import type { ChainAdapterPort, KeyMaterial, PreparedTransfer, SignedTransfer, TransferIntent } from './adapter';
+import { prepareEthereumDapp } from './ethereum-dapp';
 
 export class EthereumAdapter implements ChainAdapterPort {
   readonly chain = 'ethereum' as const;
@@ -33,6 +34,8 @@ export class EthereumAdapter implements ChainAdapterPort {
     return { payload: await this.wallet(key).signTransaction(prepared.payload as TransactionRequest) };
   }
   async signMessage(key: KeyMaterial, _network: WalletNetwork, message: string) { return this.wallet(key).signMessage(message); }
+  async signBytes(key: KeyMaterial, _network: WalletNetwork, message: Uint8Array) { return this.wallet(key).signMessage(message); }
+  prepareDapp(key: KeyMaterial, account: WalletAccount, network: WalletNetwork, payload: unknown) { return prepareEthereumDapp(key, account, network, payload); }
   async broadcast(network: WalletNetwork, signed: SignedTransfer) {
     const provider = new JsonRpcProvider(network.rpcUrl);
     try { return (await provider.broadcastTransaction(signed.payload)).hash; } finally { provider.destroy(); }

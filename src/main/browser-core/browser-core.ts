@@ -16,6 +16,9 @@ import { CoreRecovery } from './core-recovery';
 import type { SavedWindow, WindowRecord } from './core-state';
 import { AuxiliaryViewManager } from './auxiliary-view-manager';
 import type { Rectangle } from '../../shared/contracts/browser-core';
+import { clearExtensionStorage } from './extension-storage';
+import { PageActions } from './page-actions';
+import { NavigationPreparation } from './navigation-preparation';
 
 export type BrowserCoreOptions = {
   storage: StorageHost; uiUrl: string; preloadPath: string;
@@ -28,6 +31,8 @@ export class BrowserCore implements BrowserCorePort {
   private readonly events = new PageEventSource();
   private readonly sessions = new SessionRegistry(this.events);
   private readonly auxiliaryViews = new AuxiliaryViewManager(this.sessions);
+  private readonly pageActions = new PageActions(this);
+  private readonly navigationPreparation = new NavigationPreparation();
   private readonly windows: WindowManager;
   private readonly tabs: TabManager;
   private readonly navigation: NavigationController;
@@ -58,6 +63,8 @@ export class BrowserCore implements BrowserCorePort {
       },
       visit => this.events.emit({ type: 'navigationCommitted', visit }),
       profileId => this.preferences.get(profileId)?.searchEngine ?? 'brave',
+      (windowId, result) => this.events.emit({ type: 'findResult', windowId, result }),
+      this.navigationPreparation,
     );
     this.tabs = new TabManager(this.sessions, this.navigation, window => this.changed(window),
       (windowId, url) => { void this.openTab({ windowId, url }).catch(error => this.reportError(error)); });
@@ -98,6 +105,9 @@ export class BrowserCore implements BrowserCorePort {
     return this.auxiliaryViews.open(this.windows.get(windowId), options);
   }
   closeAuxiliaryView(viewId: string): void { this.auxiliaryViews.close(viewId); }
+  clearExtensionStorage(windowId: string, extensionId: string): Promise<void> {
+    return clearExtensionStorage(this.sessions.get(this.windows.get(windowId).context), extensionId);
+  }
   sessionForContext(context: BrowserContext) { return this.sessions.get(context); }
   getContexts() { return this.sessions.contexts(); }
   getProfiles() { return this.profiles.list(); }
@@ -112,6 +122,7 @@ export class BrowserCore implements BrowserCorePort {
     }
   }
   onEvent(listener: (event: CoreEvent) => void) { return this.events.subscribe(listener); }
+  registerBeforeNavigate(id: string, prepare: (tab: TabSnapshot) => Promise<void>) { return this.navigationPreparation.register(id, prepare); }
 
   async openWindow(options: { profileId?: string; isPrivate?: boolean } = {}): Promise<WindowSnapshot> {
     const profile = this.profiles.get(options.profileId);
@@ -192,6 +203,11 @@ export class BrowserCore implements BrowserCorePort {
     if (bypassCache) tab.view.webContents.reloadIgnoringCache(); else tab.view.webContents.reload();
   }
   stop(tabId: string): void { this.getTabWebContents(tabId).stop(); }
+  find(tabId: string, text: string, options: { forward: boolean; findNext: boolean; matchCase: boolean }) { return this.pageActions.find(tabId, text, options); }
+  stopFind(tabId: string): void { this.pageActions.stopFind(tabId); }
+  zoom(tabId: string, action: 'in' | 'out' | 'reset') { return this.pageActions.zoom(tabId, action); }
+  getZoom(tabId: string) { return this.pageActions.getZoom(tabId); }
+  print(tabId: string) { return this.pageActions.print(tabId); }
   moveTab(tabId: string, index: number): void { this.tabs.move(this.windowForTab(tabId), tabId, index); }
   pinTab(tabId: string, pinned: boolean): void {
     const tab = this.tabs.get(tabId); tab.snapshot.pinned = pinned;
@@ -239,6 +255,7 @@ export class BrowserCore implements BrowserCorePort {
     this.quitting = true;
     this.recovery.suspend();
     this.auxiliaryViews.dispose();
+    this.navigationPreparation.dispose();
     for (const window of [...this.windows.records.values()]) window.native.destroy();
     await this.sessions.dispose();
     this.events.dispose();

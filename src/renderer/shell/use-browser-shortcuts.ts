@@ -20,6 +20,13 @@ export function useBrowserShortcuts(currentWindow: WindowSnapshot | undefined) {
         action = browserClient.command('browser.openWindow', { isPrivate: event.shiftKey });
       } else if (modifier && key === 'o') {
         action = browserClient.command('browser.openFile', {});
+      } else if (modifier && key === 'f') {
+        event.preventDefault();
+        window.dispatchEvent(new Event('brave:find-page'));
+      } else if (modifier && key === 'p' && active) {
+        action = browserClient.command('browser.print', { tabId: active });
+      } else if (modifier && ['+', '=', '-', '0'].includes(key) && active) {
+        action = browserClient.command('browser.zoom', { tabId: active, action: key === '0' ? 'reset' : key === '-' ? 'out' : 'in' });
       } else if (modifier && key === 'w' && active) {
         action = browserClient.command('browser.closeTab', { tabId: active });
       } else if (modifier && key === 'r' && active) {

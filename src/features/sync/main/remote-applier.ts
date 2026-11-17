@@ -46,8 +46,8 @@ export class RemoteApplier {
         const mapped = specificsForItem(candidate.item, deviceId);
         return clientTagHash(mapped.field, mapped.tag) === entity.client_tag_hash;
       }) : undefined;
-      if (item && matchedPending && item.id !== matchedPending.id) item = { ...item, id: matchedPending.id, value: { ...item.value, id: matchedPending.id } } as SyncLocalItem;
-      if (item && previous && item.id !== previous.localId) item = { ...item, id: previous.localId, value: { ...item.value, id: previous.localId } } as SyncLocalItem;
+      if (item && matchedPending && item.id !== matchedPending.id) item = { ...item, id: matchedPending.id, value: item.type === 'passwords' ? item.value : { ...item.value, id: matchedPending.id } } as SyncLocalItem;
+      if (item && previous && item.id !== previous.localId) item = { ...item, id: previous.localId, value: item.type === 'passwords' ? item.value : { ...item.value, id: previous.localId } } as SyncLocalItem;
       if (!item && !previous) continue;
       mapped.push({ entity, item, previous, position: positionBytes(specifics.bookmark?.unique_position as Record<string, unknown> | undefined ?? entity.unique_position) });
     }

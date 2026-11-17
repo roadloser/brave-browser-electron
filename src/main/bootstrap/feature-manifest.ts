@@ -15,6 +15,7 @@ import { contentServicesFeature } from '../../features/content-services/main';
 import { syncFeature } from '../../features/sync/main';
 import { fingerprintPrivacyFeature } from '../../features/fingerprint-privacy/main';
 import { rewardsFeature } from '../../features/rewards/main';
+import { walletFeature } from '../../features/wallet/main';
 
 export const featureManifest: readonly FeatureDefinition[] = [
   settingsFeature,
@@ -33,4 +34,5 @@ export const featureManifest: readonly FeatureDefinition[] = [
   contentServicesFeature,
   syncFeature,
   rewardsFeature,
+  walletFeature,
 ];

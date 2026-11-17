@@ -36,6 +36,15 @@ export interface RequestHostPort {
   attachHeaders(browserSession: Session, policy: (details: OnBeforeSendHeadersListenerDetails) => Record<string, string>): Dispose;
   attachResponseHeaders(browserSession: Session, policy: (details: OnHeadersReceivedListenerDetails) => Record<string, string | string[]>): Dispose;
 }
+export type DebuggerOwner = 'fingerprint-privacy' | 'page-capture';
+export interface DebuggerLease {
+  send<Result>(method: string, parameters?: Record<string, unknown>, sessionId?: string): Promise<Result>;
+  onMessage(listener: (method: string, parameters: Record<string, unknown>, sessionId?: string) => void): Dispose;
+  dispose(): void;
+}
+export interface DebuggerHostPort {
+  acquire(tabId: string, owner: DebuggerOwner): Promise<DebuggerLease>;
+}
 export interface BrowserCorePort {
   getProfiles(): ProfileSnapshot[];
   getSyncTabs(profileId: string): SyncTabsSnapshot;
@@ -48,9 +57,11 @@ export interface BrowserCorePort {
   getTabWebContents(tabId: string): WebContents;
   openAuxiliaryView(windowId: string, options: { kind: 'extension-popup'; url: string; bounds: Rectangle }): Promise<string>;
   closeAuxiliaryView(viewId: string): void;
+  clearExtensionStorage(windowId: string, extensionId: string): Promise<void>;
   sessionForContext(context: BrowserContext): Session;
   getContexts(): BrowserContext[];
   onEvent(listener: (event: CoreEvent) => void): Dispose;
+  registerBeforeNavigate(id: string, prepare: (tab: TabSnapshot) => Promise<void>): Dispose;
   openWindow(options?: { profileId?: string; isPrivate?: boolean }): Promise<WindowSnapshot>;
   openFile(windowId: string): Promise<TabSnapshot | null>;
   createProfile(name: string): ProfileSnapshot;
@@ -65,6 +76,11 @@ export interface BrowserCorePort {
   goForward(tabId: string): void;
   reload(tabId: string, bypassCache?: boolean): void;
   stop(tabId: string): void;
+  find(tabId: string, text: string, options: { forward: boolean; findNext: boolean; matchCase: boolean }): number;
+  stopFind(tabId: string): void;
+  zoom(tabId: string, action: 'in' | 'out' | 'reset'): number;
+  getZoom(tabId: string): number;
+  print(tabId: string): Promise<{ success: boolean; failureReason?: string }>;
   moveTab(tabId: string, index: number): void;
   pinTab(tabId: string, pinned: boolean): void;
   muteTab(tabId: string, muted: boolean): void;

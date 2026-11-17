@@ -17,6 +17,7 @@ import { privacyCommandSchemas, type PrivacyCommandResults, type PrivacyState } 
 import { contentServicesCommandSchemas, type ContentServicesCommandResults, type NewsState } from './content-services';
 import { walletCommandSchemas, type WalletCommandResults, type WalletState } from './wallet';
 import { rewardsCommandSchemas, type RewardsCommandResults, type RewardsState } from './rewards';
+import { browserActionCommandSchemas, type BrowserActionCommandResults, type FindResult } from './browser-actions';
 import type { WireError } from '../errors';
 
 export const WIRE_VERSION = 1;
@@ -33,6 +34,7 @@ export const commandSchemas = {
   ...contentServicesCommandSchemas,
   ...walletCommandSchemas,
   ...rewardsCommandSchemas,
+  ...browserActionCommandSchemas,
 };
 export type CommandName = keyof typeof commandSchemas;
 export type CommandInput<Name extends CommandName> = z.input<(typeof commandSchemas)[Name]>;
@@ -41,14 +43,15 @@ export type CommandResults = BrowserCommandResults & TabGroupCommandResults & Bo
   & SettingsCommandResults & DownloadsCommandResults & SiteSettingsCommandResults
   & CredentialsCommandResults & PageToolsCommandResults & NewTabCommandResults
   & LeoCommandResults & ExtensionsCommandResults & ShieldsCommandResults & SyncCommandResults & PrivacyCommandResults
-  & ContentServicesCommandResults & WalletCommandResults & RewardsCommandResults;
+  & ContentServicesCommandResults & WalletCommandResults & RewardsCommandResults & BrowserActionCommandResults;
 export type CommandEnvelope = {
   version: typeof WIRE_VERSION; requestId: string; command: CommandName; payload: unknown;
 };
 export type CommandResult<Value> = { ok: true; value: Value } | { ok: false; error: WireError };
 export interface BrowserEvents {
   'browser.state': BrowserSnapshot;
-  'browser.shortcut': { action: 'focusAddress' };
+  'browser.shortcut': { action: 'focusAddress' | 'findInPage' };
+  'browser.findResult': FindResult;
   'tabGroups.changed': TabGroupsState;
   'bookmarks.changed': BookmarksState;
   'history.changed': { revision: number };
