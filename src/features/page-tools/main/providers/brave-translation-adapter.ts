@@ -10,7 +10,7 @@ import { translationRuntimeSource } from '../../page/translation-runtime';
 export class BraveTranslationAdapter implements TranslationAdapterPort {
   readonly capability = {
     implementation: 'brave-translate-element', version: 'static-v1/chromium-150.0.7871.250',
-    scope: 'main-frame' as const, limitations: ['需要合法 Brave 服务凭据', '子框架隔离执行尚未覆盖'],
+    scope: 'main-frame' as const, limitations: ['需要合法 Brave 服务凭据', '按 Brave 原生主frame翻译范围；PDF/阅读侧栏的条件翻译路径尚未接入'],
   };
   private readonly resources = new TranslationResource();
   private readonly sessions = new Map<Session, string>();
@@ -26,21 +26,22 @@ export class BraveTranslationAdapter implements TranslationAdapterPort {
     return process.env.BRAVE_TRANSLATE_SERVICE_KEY?.trim() ?
       { available: true } : { available: false, reason: '官方翻译需要授权的 Brave 服务凭据，当前未配置' };
   }
-  async start(target: PageTarget, language: string, signal: AbortSignal) {
+  async start(target: PageTarget, language: string, signal: AbortSignal, generation: number) {
     const serviceKey = process.env.BRAVE_TRANSLATE_SERVICE_KEY?.trim();
     if (!serviceKey) throw new BrowserError('FORBIDDEN', this.available().reason!, true, { capability: 'official-translation-credentials' });
     const tab = this.runtime.core.getTab(target.tabId);
     const script = await this.resources.get((url, init) => this.runtime.network.fetch(tab, url, { ...init, purpose: 'translation' }), signal);
     if (signal.aborted) throw new BrowserError('CANCELLED', '翻译请求已取消');
     return this.runtime.pages.execute<TranslationRuntimeState>('page-tools.translation.runtime', target, {
-      action: 'start', script, apiKey: serviceKey, targetLanguage: language,
+      action: 'start', script, apiKey: serviceKey, targetLanguage: language, generation,
     });
   }
-  state(target: PageTarget) {
-    return this.runtime.pages.execute<TranslationRuntimeState | null>('page-tools.translation.runtime', target, { action: 'status' });
+  state(target: PageTarget, generation: number) {
+    return this.runtime.pages.execute<TranslationRuntimeState | null>('page-tools.translation.runtime', target, { action: 'status', generation });
   }
-  async restore(target: PageTarget, cancel: boolean) {
-    await this.runtime.pages.execute('page-tools.translation.runtime', target, { action: cancel ? 'cancel' : 'undo' });
+  async restore(target: PageTarget, cancel: boolean, generation: number) {
+    const state = await this.runtime.pages.execute<TranslationRuntimeState | null>('page-tools.translation.runtime', target, { action: cancel ? 'cancel' : 'undo', generation });
+    if (state?.status === 'failed') throw new BrowserError('UNAVAILABLE', state.error || '恢复原文失败，请重新加载页面');
   }
   dispose() {
     this.releases.forEach((release) => release());

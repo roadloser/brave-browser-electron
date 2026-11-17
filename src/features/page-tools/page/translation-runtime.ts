@@ -1,36 +1,57 @@
 export function translationRuntimeSource(argumentsValue: unknown) {
-  const input = argumentsValue as { action: 'start' | 'status' | 'cancel' | 'undo'; script?: string; apiKey?: string; targetLanguage?: string };
+  const input = argumentsValue as { action: 'start' | 'status' | 'cancel' | 'undo'; generation: number; script?: string; apiKey?: string; targetLanguage?: string };
   return `(() => {
     const input = ${JSON.stringify(input)};
     const key = '__braveTranslationRuntime';
+    const cancelledKey = '__braveTranslationCancelledGeneration';
+    const generation = input.generation;
     const existing = globalThis[key];
-    if (input.action === 'status') return existing ? existing.snapshot() : null;
+    if (input.action === 'status') return existing?.generation === generation ? existing.snapshot() : null;
     if (input.action === 'cancel' || input.action === 'undo') {
-      if (existing) existing.stop(input.action === 'undo' ? 'idle' : 'cancelled');
-      return existing ? existing.snapshot() : null;
+      globalThis[cancelledKey] = Math.max(globalThis[cancelledKey] || 0, generation);
+      if (existing?.generation === generation) existing.stop(input.action === 'undo' ? 'idle' : 'cancelled');
+      return existing?.generation === generation ? existing.snapshot() : null;
     }
-    if (existing) existing.stop('cancelled');
+    if (generation <= (globalThis[cancelledKey] || 0) || existing?.generation > generation) {
+      return { status: 'cancelled', sourceLanguage: 'auto' };
+    }
+    if (existing?.generation === generation) return existing.snapshot();
+    if (existing) {
+      existing.stop('cancelled');
+      if (existing.snapshot().status === 'failed') return existing.snapshot();
+    }
     const requests = new Set();
     const styles = new Set();
     let library;
-    let timer;
+    const timers = new Set();
+    const schedule = (callback, milliseconds) => {
+      const timer = setTimeout(() => { timers.delete(timer); if (!stopped) callback(); }, milliseconds);
+      timers.add(timer);
+      return timer;
+    };
+    const clearTimers = () => { timers.forEach((timer) => clearTimeout(timer)); timers.clear(); };
     let stopped = false;
     let state = { status: 'translating', sourceLanguage: document.documentElement.lang || 'auto', error: undefined };
     const snapshot = () => ({ ...state });
     const stop = (status) => {
       stopped = true;
-      clearTimeout(timer);
+      clearTimers();
       requests.forEach((request) => request.abort());
       requests.clear();
-      if (library) library.restore();
-      XMLHttpRequest.prototype.open = originalOpen;
+      let restored = true;
+      try { if (library) library.restore(); } catch { restored = false; }
+      if (XMLHttpRequest.prototype.open === patchedOpen) XMLHttpRequest.prototype.open = originalOpen;
       styles.forEach((style) => style.remove());
       styles.clear();
-      state.status = status;
+      window.removeEventListener('pagehide', pageHide);
+      input.apiKey = undefined; input.script = undefined;
+      if (globalThis.cr?.googleTranslate === callbacks) globalThis.cr.googleTranslate = previousCallbacks;
+      state.status = restored ? status : 'failed';
+      if (!restored) state.error = '恢复原文失败，请重新加载页面';
     };
     const fail = (message) => {
       stop('failed');
-      state.error = message;
+      state.error = state.error || message;
     };
     const officialUrl = (value) => {
       const url = new URL(value, 'https://translate.brave.com');
@@ -43,13 +64,15 @@ export function translationRuntimeSource(argumentsValue: unknown) {
     };
     const originalOpen = globalThis.__braveTranslateOriginalOpen || XMLHttpRequest.prototype.open;
     globalThis.__braveTranslateOriginalOpen = originalOpen;
-    XMLHttpRequest.prototype.open = function(method, url, async = true, user, password) {
+    const patchedOpen = function(method, url, async = true, user, password) {
+      if (stopped) throw new DOMException('翻译操作已取消', 'AbortError');
       requests.add(this);
       this.addEventListener('loadend', () => requests.delete(this), { once: true });
       const rewritten = officialUrl(String(url));
       if (!rewritten) return originalOpen.call(this, method, 'data:text/plain,', async);
       return originalOpen.call(this, method, rewritten, async, user, password);
     };
+    XMLHttpRequest.prototype.open = patchedOpen;
     const fetchResource = (url, receive) => {
       if (stopped) return;
       const request = new XMLHttpRequest();
@@ -65,7 +88,8 @@ export function translationRuntimeSource(argumentsValue: unknown) {
       request.send();
     };
     globalThis.cr = globalThis.cr || {};
-    globalThis.cr.googleTranslate = {
+    const previousCallbacks = globalThis.cr.googleTranslate;
+    const callbacks = {
       onLoadJavascript(url) {
         fetchResource(url, (source) => {
           const empty = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciLz4=';
@@ -86,6 +110,7 @@ export function translationRuntimeSource(argumentsValue: unknown) {
       },
       onTranslateElementLoad() {
         if (stopped) return;
+        clearTimers();
         try {
           library = globalThis.google.translate.TranslateService({
             key: input.apiKey, serverParams: '', timeInfo: { fetchStart: Date.now(), fetchEnd: Date.now() }, useSecureConnection: true
@@ -96,7 +121,7 @@ export function translationRuntimeSource(argumentsValue: unknown) {
             if (stopped) return;
             if (!library.isAvailable()) {
               if (Date.now() > deadline) return fail('翻译服务初始化超时');
-              timer = setTimeout(ready, 100);
+              schedule(ready, 100);
               return;
             }
             try {
@@ -104,12 +129,12 @@ export function translationRuntimeSource(argumentsValue: unknown) {
                 if (stopped) return;
                 if (error) return fail(error === 2 ? '不支持此语言' : '翻译失败，已恢复原文');
                 if (finished) {
-                  clearTimeout(timer);
+                  clearTimers();
                   state.status = 'translated';
                   state.sourceLanguage = library.getDetectedLanguage ? library.getDetectedLanguage() : 'und';
                 }
               });
-              if (state.status === 'translating') timer = setTimeout(() => fail('翻译超时，已恢复原文'), 60000);
+              if (state.status === 'translating') schedule(() => fail('翻译超时，已恢复原文'), 60000);
             } catch { fail('翻译失败，已恢复原文'); }
           };
           ready();
@@ -117,9 +142,11 @@ export function translationRuntimeSource(argumentsValue: unknown) {
       },
       onTranslateElementError() { fail('翻译脚本执行失败'); }
     };
-    globalThis[key] = { snapshot, stop };
-    window.addEventListener('pagehide', () => stop('cancelled'), { once: true });
-    timer = setTimeout(() => fail('翻译资源加载超时'), 30000);
+    globalThis.cr.googleTranslate = callbacks;
+    const pageHide = () => stop('cancelled');
+    globalThis[key] = { generation, snapshot, stop };
+    window.addEventListener('pagehide', pageHide, { once: true });
+    schedule(() => fail('翻译资源加载超时'), 30000);
     try { new Function(input.script).call(globalThis); }
     catch { fail('翻译脚本执行失败'); }
     input.script = undefined;

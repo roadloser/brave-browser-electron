@@ -12,9 +12,9 @@ export type TranslationRuntimeState = { status: TranslationState['status']; sour
 export interface TranslationAdapterPort {
   readonly capability: AdapterCapability;
   available(): { available: boolean; reason?: string };
-  start(target: PageTarget, language: string, signal: AbortSignal): Promise<TranslationRuntimeState>;
-  state(target: PageTarget): Promise<TranslationRuntimeState | null>;
-  restore(target: PageTarget, cancel: boolean): Promise<void>;
+  start(target: PageTarget, language: string, signal: AbortSignal, generation: number): Promise<TranslationRuntimeState>;
+  state(target: PageTarget, generation: number): Promise<TranslationRuntimeState | null>;
+  restore(target: PageTarget, cancel: boolean, generation: number): Promise<void>;
   dispose(): void;
 }
 export interface CaptureAdapterPort {

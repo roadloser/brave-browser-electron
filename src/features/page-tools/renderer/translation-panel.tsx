@@ -36,7 +36,7 @@ export function TranslationPanel({ tabId, open, onOpenChange }: {
       <p className="translation-details">页面文字将发送到 Brave 官方翻译服务。翻译后可恢复原文。</p>
       {state?.status === 'translating' && <p>正在翻译…</p>}
       {state?.status === 'translated' && <p>主页面已翻译，源语言：{state.sourceLanguage}</p>}
-      {Boolean(state?.excludedFrames) && <p className="translation-details">此页有 {state?.excludedFrames} 个嵌入页面尚未覆盖，不能视为整页翻译完成。</p>}
+      {Boolean(state?.excludedFrames) && <p className="translation-details">此页有 {state?.excludedFrames} 个嵌入页面；本次翻译作用于主页面，嵌入内容的变化未单独确认。</p>}
       {state?.status === 'cancelled' && <p>翻译已取消。</p>}
       {(error || state?.error) && <ErrorNotice message={error || state?.error || ''} />}
       <div className="form-actions">

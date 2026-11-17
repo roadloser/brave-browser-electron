@@ -1,41 +1,33 @@
-import type { BrowserContext } from '../../../shared/contracts/browser-core';
 import type { TranslationState } from '../../../shared/contracts/page-tools';
 import type { FeatureRuntime } from '../../../shared/module-lifecycle';
-import type { PageTarget } from '../../../shared/runtime-ports';
 import { BrowserError } from '../../../shared/errors';
 import type { TranslationAdapterPort, TranslationRuntimeState } from './providers/provider';
 import { BraveTranslationAdapter } from './providers/brave-translation-adapter';
-
-type Operation = { target: PageTarget; context: BrowserContext; controller: AbortController; timer?: ReturnType<typeof setTimeout> };
+import { TranslationLifecycle, type TranslationOperation } from './translation-lifecycle';
 
 export class TranslationProvider {
   private readonly states = new Map<string, TranslationState>();
-  private readonly operations = new Map<string, Operation>();
   private readonly adapter: TranslationAdapterPort;
-  private readonly releases: Array<() => void>;
+  private readonly lifecycle: TranslationLifecycle;
+  private readonly release: () => void;
   private revision = 0;
 
   constructor(private readonly runtime: FeatureRuntime) {
     this.adapter = new BraveTranslationAdapter(runtime);
-    this.releases = [
-      runtime.core.onEvent((event) => {
-        if (event.type === 'navigationCommitted') {
-          const operation = this.operations.get(event.visit.tabId);
-          if (operation && operation.target.navigationId !== event.visit.navigationId) {
-            this.stopOperation(event.visit.tabId);
+    this.lifecycle = new TranslationLifecycle(this.adapter);
+    this.release = runtime.core.onEvent((event) => {
+      if (event.type === 'navigationCommitted') {
+        void this.lifecycle.navigation(event.visit).then((result) => {
+          if (result.changed && !this.lifecycle.current(event.visit.tabId)) {
             this.states.delete(event.visit.tabId);
+            this.publish(event.visit.tabId, { ...this.state(event.visit.tabId),
+              status: result.error ? 'failed' : 'idle', error: result.error });
           }
-        }
-        if (event.type === 'tabClosed') {
-          this.stopOperation(event.tabId); this.states.delete(event.tabId);
-        }
-        if (event.type === 'contextDisposed') {
-          for (const [tabId, operation] of this.operations) if (operation.context.contextId === event.context.contextId) {
-            this.stopOperation(tabId); this.states.delete(tabId);
-          }
-        }
-      }),
-    ];
+        }).catch(() => undefined);
+      }
+      if (event.type === 'tabClosed') { this.lifecycle.close(event.tabId); this.states.delete(event.tabId); }
+      if (event.type === 'contextDisposed') for (const tabId of this.lifecycle.closeContext(event.context.contextId)) this.states.delete(tabId);
+    });
   }
 
   state(tabId: string): TranslationState {
@@ -52,94 +44,75 @@ export class TranslationProvider {
     if (!/^[a-z]{2,3}(-[a-z]{2,4})?$/i.test(targetLanguage)) throw new BrowserError('INVALID_ARGUMENT', '目标语言无效');
     const availability = this.adapter.available();
     if (!availability.available) throw new BrowserError('FORBIDDEN', availability.reason!, true, { capability: 'official-translation-credentials' });
-    if (this.operations.has(tabId)) await this.cancel(tabId, false);
-    const controller = new AbortController();
-    const operation: Operation = {
-      target: { tabId, navigationId: tab.navigationId, origin: new URL(tab.url).origin },
-      context: tab, controller,
-    };
-    this.operations.set(tabId, operation);
+    const operation = this.lifecycle.begin(tab);
     const contents = this.runtime.core.getTabWebContents(tabId);
     const excludedFrames = Math.max(0, contents.mainFrame.framesInSubtree.length - 1);
     this.publish(tabId, { ...this.state(tabId), targetLanguage, status: 'translating', excludedFrames, translatedFrames: 0, error: undefined });
-    const timeout = setTimeout(() => controller.abort(), 25000);
+    const timeout = setTimeout(() => operation.controller.abort(), 25000);
     try {
-      const result = await this.adapter.start(operation.target, targetLanguage, controller.signal);
-      if (controller.signal.aborted || this.operations.get(tabId) !== operation) return this.state(tabId);
-      clearTimeout(timeout);
-      this.applyRuntime(tabId, result);
-      if (result.status === 'translating') this.poll(tabId, operation);
-    } catch (error) {
-      if (this.operations.get(tabId) === operation) {
-        const cancelled = controller.signal.aborted;
-        this.publish(tabId, { ...this.state(tabId), status: cancelled ? 'cancelled' : 'failed',
-          error: cancelled ? '翻译请求已取消或超时' : error instanceof Error ? error.message : '翻译失败' });
-        this.stopOperation(tabId);
+      const result = await this.adapter.start(operation.target, targetLanguage, operation.controller.signal, operation.generation);
+      if (!this.lifecycle.isCurrent(operation)) {
+        await this.adapter.restore(operation.target, true, operation.generation).catch(() => undefined);
+        return this.state(tabId);
       }
-    } finally {
-      clearTimeout(timeout);
-    }
+      this.applyRuntime(tabId, result);
+      if (result.status === 'translating' || result.status === 'translated') this.poll(tabId, operation);
+    } catch (error) {
+      if (this.lifecycle.current(tabId) === operation) {
+        const cancelled = operation.controller.signal.aborted;
+        let restorationError: string | undefined;
+        await this.lifecycle.rollback(operation).catch((failure) => { restorationError = failure instanceof Error ? failure.message : '恢复原文失败，请重新加载页面'; });
+        if (!this.lifecycle.current(tabId)) this.publish(tabId, {
+          ...this.state(tabId), status: restorationError ? 'failed' : cancelled ? 'cancelled' : 'failed',
+          error: restorationError ?? (cancelled ? '翻译请求已取消或超时' : error instanceof Error ? error.message : '翻译失败'),
+        });
+      }
+    } finally { clearTimeout(timeout); }
     return this.state(tabId);
   }
 
   async cancel(tabId: string, undo: boolean) {
-    const operation = this.operations.get(tabId);
-    if (operation) this.stopOperation(tabId);
-    const tab = this.runtime.core.getTab(tabId);
-    const state = this.state(tabId);
-    if (/^https?:/.test(tab.url)) {
-      try {
-        await this.adapter.restore({
-          tabId, navigationId: tab.navigationId, origin: new URL(tab.url).origin,
-        }, !undo);
-      } catch (error) {
-        this.publish(tabId, { ...state, status: 'failed', error: '恢复原文失败，请重新加载页面' });
-        throw error;
-      }
+    try {
+      await this.lifecycle.cancel(tabId, undo);
+      if (!this.lifecycle.current(tabId)) this.publish(tabId, { ...this.state(tabId), status: undo ? 'idle' : 'cancelled', translatedFrames: 0, error: undefined });
+    } catch (error) {
+      if (!this.lifecycle.current(tabId)) this.publish(tabId, { ...this.state(tabId), status: 'failed', error: '恢复原文失败，请重新加载页面' });
+      throw error;
     }
-    this.publish(tabId, { ...state, status: undo ? 'idle' : 'cancelled', translatedFrames: 0, error: undefined });
     return this.state(tabId);
   }
 
   async dispose() {
-    for (const [tabId, operation] of this.operations) {
-      this.stopOperation(tabId);
-      await this.adapter.restore(operation.target, false).catch(() => undefined);
-    }
-    this.releases.forEach((release) => release());
-    this.adapter.dispose();
-    this.states.clear();
+    this.release(); await this.lifecycle.dispose(); this.adapter.dispose(); this.states.clear();
   }
 
-  private poll(tabId: string, operation: Operation) {
+  private poll(tabId: string, operation: TranslationOperation) {
     operation.timer = setTimeout(async () => {
-      if (this.operations.get(tabId) !== operation || operation.controller.signal.aborted) return;
+      if (!this.lifecycle.isCurrent(operation)) return;
       try {
-        const result = await this.adapter.state(operation.target);
+        const result = await this.adapter.state(operation.target, operation.generation);
+        if (!this.lifecycle.isCurrent(operation)) return;
         if (!result) throw new BrowserError('UNAVAILABLE', '翻译运行环境已失效，请重新加载页面');
-        this.applyRuntime(tabId, result);
-        if (result.status === 'translating') this.poll(tabId, operation);
+        const current = this.state(tabId);
+        if (result.status !== current.status || result.error !== current.error || result.sourceLanguage !== current.sourceLanguage) this.applyRuntime(tabId, result);
+        if (result.status === 'translating' || result.status === 'translated') this.poll(tabId, operation);
       } catch (error) {
-        this.publish(tabId, { ...this.state(tabId), status: 'failed', error: error instanceof Error ? error.message : '翻译状态读取失败' });
-        this.stopOperation(tabId);
+        if (this.lifecycle.current(tabId) !== operation) return;
+        let message = error instanceof Error ? error.message : '翻译状态读取失败';
+        await this.lifecycle.rollback(operation).catch(() => { message = '恢复原文失败，请重新加载页面'; });
+        if (!this.lifecycle.current(tabId)) this.publish(tabId, { ...this.state(tabId), status: 'failed', error: message });
       }
-    }, 250);
+    }, this.state(tabId).status === 'translated' ? 1000 : 250);
   }
 
   private applyRuntime(tabId: string, result: TranslationRuntimeState) {
     this.publish(tabId, { ...this.state(tabId), ...result, translatedFrames: result.status === 'translated' ? 1 : 0 });
   }
-
   private publish(tabId: string, state: TranslationState) {
-    const tab = this.runtime.core.getTab(tabId);
+    let windowId: string;
+    try { windowId = this.runtime.core.getTab(tabId).windowId; } catch { return; }
     const next = { ...state, revision: ++this.revision };
     this.states.set(tabId, next);
-    this.runtime.publish('pageTools.translationChanged', next, { windowId: tab.windowId });
-  }
-
-  private stopOperation(tabId: string) {
-    const operation = this.operations.get(tabId);
-    if (operation) { operation.controller.abort(); clearTimeout(operation.timer); }
-    this.operations.delete(tabId);
+    this.runtime.publish('pageTools.translationChanged', next, { windowId });
   }
 }
