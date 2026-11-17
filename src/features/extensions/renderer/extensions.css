@@ -1,0 +1,32 @@
+.extensions-page { height: 100%; overflow: auto; background: var(--color-bg); color: var(--color-text); padding: 28px 36px; box-sizing: border-box; }
+.extensions-page > header { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.extensions-page h1 { margin: 0 0 8px; font-size: 24px; }
+.extensions-page h2 { font-size: 16px; margin: 0 0 4px; }
+.extensions-page p { line-height: 1.6; }
+.extensions-page > header p, .extensions-page small { color: var(--color-muted); }
+.extensions-page button, .extension-dialog button { font: inherit; color: inherit; border: 1px solid var(--color-border); border-radius: 7px; padding: 8px 12px; background: var(--color-surface); cursor: pointer; }
+.extensions-page button:disabled, .extension-dialog button:disabled { opacity: .5; cursor: default; }
+.extension-capability { background: var(--color-accent-soft); color: var(--color-accent); border-radius: 10px; padding: 14px 18px; line-height: 1.7; margin: 20px 0; }
+.extension-store { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin: 24px 0; }
+.extension-store label { display: grid; gap: 8px; font-size: 13px; }
+.extension-store input { width: 300px; padding: 10px; font: inherit; border: 1px solid var(--color-border); color: inherit; background: var(--color-surface); border-radius: 7px; }
+.extension-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 18px; }
+.extension-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; padding: 20px; }
+.extension-heading { display: flex; align-items: center; gap: 12px; }
+.extension-toggle { margin-left: auto; font-size: 13px; display: flex; gap: 6px; align-items: center; }
+.extension-id { display: block; overflow-wrap: anywhere; }
+.extension-card footer, .extension-dialog footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+.extension-card details { margin: 16px 0; font-size: 13px; line-height: 1.7; }
+.extension-card summary { cursor: pointer; }
+.extension-error { padding: 10px 12px; border-radius: 7px; background: var(--color-danger-soft); color: var(--color-danger); }
+.extension-error button { margin-left: 12px; }
+.extension-status { color: var(--color-muted); font-size: 13px; }
+.extension-empty { color: var(--color-muted); text-align: center; margin: 70px 0; }
+.extension-dialog { width: min(460px, 90vw); }
+.extension-dialog p { line-height: 1.7; }
+.extension-dialog h3 { font-size: 14px; }
+.extension-dialog li { margin: 6px 0; overflow-wrap: anywhere; }
+.extension-dialog [role=alert], .extension-warning { color: var(--color-danger); }
+.extension-action-list { list-style: none; padding: 0; }
+.extension-action-list button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; }
+.extension-popup-dismiss { position: fixed; right: 20px; top: 48px; z-index: 50; border: 1px solid var(--color-border); border-radius: 7px; padding: 6px 12px; color: var(--color-text); background: var(--color-surface); cursor: pointer; }

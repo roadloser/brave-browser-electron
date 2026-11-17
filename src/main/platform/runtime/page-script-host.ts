@@ -3,7 +3,7 @@ import type { BrowserCorePort } from '../../../shared/runtime-ports';
 import { BrowserError } from '../../../shared/errors';
 
 export type PageTarget = { tabId: string; navigationId: string; origin: string; frame?: { processId: number; routingId: number } };
-export type PageScript = { world: 'isolated' | 'main'; source: (argumentsValue: unknown) => string };
+export type PageScript = { world: 'isolated' | 'main' | 'translation'; source: (argumentsValue: unknown) => string };
 
 export class PageScriptHost {
   private readonly scripts = new Map<string, PageScript>();
@@ -12,6 +12,7 @@ export class PageScriptHost {
 
   register(id: string, script: PageScript): () => void {
     if (this.scripts.has(id)) throw new BrowserError('CONFLICT', '页面能力重复注册');
+    if (script.world === 'translation' && !id.startsWith('page-tools.translation.')) throw new BrowserError('FORBIDDEN', '翻译执行世界只用于已登记的翻译操作');
     this.scripts.set(id, script);
     return () => this.scripts.delete(id);
   }
@@ -27,12 +28,12 @@ export class PageScriptHost {
       : contents.mainFrame;
     this.assertFrame(frame, target.origin, contents.mainFrame);
     const source = script.source(argumentsValue);
-    if (script.world === 'isolated' && frame !== contents.mainFrame) {
+    if (script.world !== 'main' && frame !== contents.mainFrame) {
       throw new BrowserError('UNAVAILABLE', '当前运行时不提供子 frame 隔离世界执行接口');
     }
     const result = script.world === 'main'
       ? await frame.executeJavaScript(source, true)
-      : await contents.executeJavaScriptInIsolatedWorld(999, [{ code: source }], true);
+      : await contents.executeJavaScriptInIsolatedWorld(script.world === 'translation' ? 1004 : 1001, [{ code: source }], true);
     if (this.core.getTab(target.tabId).navigationId !== target.navigationId) {
       throw new BrowserError('CANCELLED', '页面已导航，结果已丢弃');
     }

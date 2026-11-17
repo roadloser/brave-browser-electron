@@ -23,6 +23,7 @@ export function translationRuntimeSource(argumentsValue: unknown) {
       requests.forEach((request) => request.abort());
       requests.clear();
       if (library) library.restore();
+      XMLHttpRequest.prototype.open = originalOpen;
       styles.forEach((style) => style.remove());
       styles.clear();
       state.status = status;

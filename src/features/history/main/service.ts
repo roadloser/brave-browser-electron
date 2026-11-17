@@ -5,7 +5,17 @@ import { BrowserError } from '../../../shared/errors';
 import { HistoryRepository } from './repository';
 
 export class HistoryService {
+  private readonly localListeners = new Set<(profileId: string) => void>();
   constructor(private readonly runtime: FeatureRuntime) {}
+
+  subscribeLocal(listener: (profileId: string) => void) {
+    this.localListeners.add(listener);
+    return () => { this.localListeners.delete(listener); };
+  }
+
+  notifyImported(profileId: string): void {
+    this.runtime.publish('history.changed', { revision: this.repository(profileId).revision() }, { profileId });
+  }
 
   record(visit: NavigationCommitted): void {
     if (visit.isPrivate || !this.recordable(visit.url)) return;
@@ -42,6 +52,7 @@ export class HistoryService {
 
   private changed(profileId: string, revision: number): void {
     this.runtime.publish('history.changed', { revision }, { profileId });
+    for (const listener of this.localListeners) listener(profileId);
   }
 
   private repository(profileId: string): HistoryRepository {

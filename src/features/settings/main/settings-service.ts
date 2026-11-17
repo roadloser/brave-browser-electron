@@ -9,6 +9,7 @@ export class SettingsService {
   private readonly revisions = new Map<string, number>();
   private readonly disposeEvents: () => void;
   private readonly headerDisposers = new Map<string, () => void>();
+  private readonly listeners = new Set<(profileId: string) => void>();
 
   constructor(private readonly runtime: FeatureRuntime) {
     this.repository = new SettingsRepository(runtime.storage);
@@ -39,9 +40,17 @@ export class SettingsService {
     this.apply(context.profileId);
     const state = this.get(context.profileId);
     this.runtime.publish('settings.changed', state, { profileId: context.profileId, includePrivate: true });
+    for (const listener of this.listeners) listener(context.profileId);
     return state;
   }
   reset(context: CommandContext) { return this.update(context, defaultSettings); }
+  subscribe(listener: (profileId: string) => void) { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; }
+  notifyImported(profileId: string): void {
+    this.revisions.set(profileId, (this.revisions.get(profileId) ?? 0) + 1);
+    this.apply(profileId);
+    this.runtime.publish('settings.changed', this.get(profileId), { profileId, includePrivate: true });
+    for (const listener of this.listeners) listener(profileId);
+  }
   async chooseDownloadDirectory(context: CommandContext) {
     const result = await dialog.showOpenDialog(this.runtime.core.getNativeWindow(context.windowId), {
       title: '选择下载文件夹', properties: ['openDirectory', 'createDirectory'],

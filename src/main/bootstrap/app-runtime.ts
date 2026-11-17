@@ -1,6 +1,5 @@
 import { app, BrowserWindow } from 'electron';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
 import { BrowserCore } from '../browser-core/browser-core';
 import { registerBrowserIpc } from '../browser-core/register-ipc';
 import { SqliteStorageHost } from '../platform/storage/database';
@@ -15,6 +14,8 @@ import type { Dispose } from '../../shared/contracts/envelope';
 import type { FeatureRegistration, FeatureRuntime } from '../../shared/module-lifecycle';
 import { featureManifest } from './feature-manifest';
 import { migrationManifest } from './migration-manifest';
+import { SyncDataCoordinator } from './sync-data';
+import { resolveUiUrl } from './ui-location';
 
 export class AppRuntime {
   private core?: BrowserCore;
@@ -26,30 +27,36 @@ export class AppRuntime {
   private disposed = false;
 
   async start(): Promise<void> {
-    const uiUrl = app.isPackaged
-      ? pathToFileURL(join(app.getAppPath(), 'dist/renderer/index.html')).href
-      : process.env.BRAVE_ELECTRON_UI_URL ?? pathToFileURL(join(app.getAppPath(), 'dist/renderer/index.html')).href;
+    const uiUrl = resolveUiUrl();
     const storage = new SqliteStorageHost(app.getPath('userData'));
     this.storage = storage;
+    let reportCoreError = (_error: unknown): void => {};
     const core = new BrowserCore({
       storage,
       uiUrl,
       preloadPath: join(app.getAppPath(), 'dist/preload/index.cjs'),
       onProfileReady: profileId => storage.migrate(profileId, migrationManifest),
+      onError: error => reportCoreError(error),
     });
     this.core = core;
     const router = new IpcRouter(core, uiUrl);
     this.router = router;
     const publish = createEventPublisher(core);
+    reportCoreError = error => {
+      for (const profile of core.getProfiles()) {
+        publish('app.error', mapError(error), { profileId: profile.id, includePrivate: true });
+      }
+    };
     const pages = new PageScriptHost(core);
     this.pages = pages;
     const policies = new NetworkPolicyCoordinator();
     const runtime: FeatureRuntime = {
-      core, storage, router, publish, pages,
+      core, storage, router, publish, pages, syncData: new SyncDataCoordinator(),
       secrets: new SecretStore(), requests: new ElectronRequestHost(policies),
       assets: {
         credentialPreloadPath: join(app.getAppPath(), 'dist/preload/credentials.cjs'),
         translationPreloadPath: join(app.getAppPath(), 'dist/preload/translation.cjs'),
+        shieldsPreloadPath: join(app.getAppPath(), 'dist/preload/shields.cjs'),
       },
     };
     for (const profile of core.getProfiles()) storage.migrate(profile.id, migrationManifest);

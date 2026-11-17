@@ -1,4 +1,4 @@
-import type { OnBeforeRequestListenerDetails, OnBeforeSendHeadersListenerDetails, Session } from 'electron';
+import type { OnBeforeRequestListenerDetails, OnBeforeSendHeadersListenerDetails, OnHeadersReceivedListenerDetails, Session } from 'electron';
 import { NetworkPolicyCoordinator } from './request-policy';
 
 export type RequestDecision = { cancel?: boolean; redirectURL?: string };
@@ -10,7 +10,7 @@ export class ElectronRequestHost {
   attach(browserSession: Session, evaluate: RequestEvaluator, onError: (error: unknown) => void): () => void {
     const release = this.policies.claimNative(browserSession);
     let disposed = false;
-    browserSession.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*'] }, (details, callback) => {
+    browserSession.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*', 'ws://*/*', 'wss://*/*'] }, (details, callback) => {
       Promise.resolve().then(() => evaluate(details)).then(
         decision => callback(disposed ? { cancel: false } : decision),
         error => { onError(error); callback({ cancel: true }); },
@@ -31,5 +31,14 @@ export class ElectronRequestHost {
       catch { callback({ cancel: true }); }
     });
     return () => { browserSession.webRequest.onBeforeSendHeaders(null); release(); };
+  }
+
+  attachResponseHeaders(browserSession: Session, policy: (details: OnHeadersReceivedListenerDetails) => Record<string, string | string[]>): () => void {
+    const release = this.policies.claimNative(browserSession, 'response-headers');
+    browserSession.webRequest.onHeadersReceived({ urls: ['http://*/*', 'https://*/*', 'ws://*/*', 'wss://*/*'] }, (details, callback) => {
+      try { callback({ responseHeaders: policy(details) }); }
+      catch { callback({ cancel: true }); }
+    });
+    return () => { browserSession.webRequest.onHeadersReceived(null); release(); };
   }
 }

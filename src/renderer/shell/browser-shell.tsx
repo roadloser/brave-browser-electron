@@ -60,6 +60,7 @@ export function BrowserShell({ renderPage, toolbarSlots, sidebarSlots, bookmarks
             {tab?.error && <div className="navigation-error"><ErrorNotice message={tab.error} /></div>}
           </ContentViewport>
         </div>
+        <div id="browser-feature-panel-host" />
         <Sidebar slots={sidebarSlots} />
       </div>
     </div>

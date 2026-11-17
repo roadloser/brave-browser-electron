@@ -3,6 +3,7 @@ import { historyMigrations } from './schema';
 import { HistoryService } from './service';
 import { registerHistoryIpc } from './register-ipc';
 import { registerVisitRecorder } from './visit-recorder';
+import { createHistorySyncAdapter } from './sync-adapter';
 
 export const historyFeature: FeatureDefinition = {
   id: 'history',
@@ -11,6 +12,7 @@ export const historyFeature: FeatureDefinition = {
     const service = new HistoryService(runtime);
     const stopCommands = registerHistoryIpc(runtime, service);
     const stopRecording = registerVisitRecorder(runtime, service);
-    return { id: 'history', dispose() { stopRecording(); stopCommands(); } };
+    const stopSync = runtime.syncData.register('history', createHistorySyncAdapter(runtime, service));
+    return { id: 'history', dispose() { stopSync(); stopRecording(); stopCommands(); } };
   },
 };

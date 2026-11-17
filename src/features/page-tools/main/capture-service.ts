@@ -3,10 +3,13 @@ import { writeFile, rename, unlink } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import type { FeatureRuntime } from '../../../shared/module-lifecycle';
 import { BrowserError } from '../../../shared/errors';
+import type { CaptureAdapterPort } from './providers/provider';
+import { ElectronCaptureAdapter } from './providers/electron-capture-adapter';
 
 export class CaptureService {
   private readonly capturing = new Set<string>();
-  constructor(private readonly runtime: FeatureRuntime) {}
+  private readonly adapter: CaptureAdapterPort;
+  constructor(private readonly runtime: FeatureRuntime) { this.adapter = new ElectronCaptureAdapter(runtime); }
 
   async capture(tabId: string, fullPage: boolean): Promise<{ saved: boolean; path?: string }> {
     if (this.capturing.has(tabId)) throw new BrowserError('CONFLICT', '此页面正在截图');
@@ -22,28 +25,7 @@ export class CaptureService {
       });
       if (target.canceled || !target.filePath) return { saved: false };
       this.assertNavigation(tabId, tab.navigationId);
-      const contents = this.runtime.core.getTabWebContents(tabId);
-      let bytes: Buffer;
-      if (fullPage) {
-        if (contents.debugger.isAttached()) throw new BrowserError('CONFLICT', '调试器正在使用页面，请关闭开发者工具后重试完整截图');
-        contents.debugger.attach('1.3');
-        try {
-          const metrics = await contents.debugger.sendCommand('Page.getLayoutMetrics') as {
-            cssContentSize: { width: number; height: number };
-          };
-          const { width, height } = metrics.cssContentSize;
-          if (width * height > 80_000_000 || height > 32760 || width > 16384) {
-            throw new BrowserError('UNAVAILABLE', '页面过长，无法安全生成完整截图，请使用当前视口截图');
-          }
-          const image = await contents.debugger.sendCommand('Page.captureScreenshot', {
-            format: 'png', captureBeyondViewport: true,
-            clip: { x: 0, y: 0, width, height, scale: 1 },
-          }) as { data: string };
-          bytes = Buffer.from(image.data, 'base64');
-        } finally {
-          if (!contents.isDestroyed() && contents.debugger.isAttached()) contents.debugger.detach();
-        }
-      } else bytes = (await contents.capturePage()).toPNG();
+      const bytes = await this.adapter.capture(tabId, fullPage);
       this.assertNavigation(tabId, tab.navigationId);
       temporary = `${target.filePath}.${randomUUID()}.tmp`;
       await writeFile(temporary, bytes, { flag: 'wx' });

@@ -2,13 +2,13 @@ import { randomUUID } from 'node:crypto';
 import { cp, mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { dialog } from 'electron';
-import { downloadExtension } from 'electron-chrome-web-store';
 import type { ExtensionInstallProposal } from '../../../shared/contracts/extensions';
 import type { CommandContext, FeatureRuntime } from '../../../shared/module-lifecycle';
 import { profilePath } from '../../../main/platform/storage/profile-paths';
 import { BrowserError } from '../../../shared/errors';
 import { fingerprintDirectory, manifestExtensionId, manifestPermissions, readManifest, type ExtensionManifest } from './manifest';
 import type { StoredExtension } from './extension-repository';
+import type { ExtensionPackageSourcePort } from './library-port';
 
 export type InstallProposal = ExtensionInstallProposal & {
   profileId: string; contextId: string; windowId: string;
@@ -20,7 +20,7 @@ export class InstallProposals {
   private readonly proposals = new Map<string, InstallProposal>();
   private readonly timer = setInterval(() => { void this.expire(); }, 60_000);
 
-  constructor(private readonly runtime: FeatureRuntime) { this.timer.unref(); }
+  constructor(private readonly runtime: FeatureRuntime, private readonly packageSource: ExtensionPackageSourcePort) { this.timer.unref(); }
 
   async chooseDirectory(context: CommandContext): Promise<ExtensionInstallProposal | null> {
     const result = await dialog.showOpenDialog(this.runtime.core.getNativeWindow(context.windowId), {
@@ -44,7 +44,7 @@ export class InstallProposals {
     if (!/^[a-p]{32}$/.test(extensionId)) throw new BrowserError('INVALID_ARGUMENT', 'Chrome 商店扩展 ID 无效');
     const cleanupPath = await this.staging(context.profileId);
     try {
-      const directory = await downloadExtension(extensionId, cleanupPath);
+      const directory = await this.packageSource.download(extensionId, cleanupPath);
       return await this.create(context, directory, cleanupPath, { source: 'web-store', expectedId: extensionId, replacesId: replacement?.id });
     } catch (error) { await rm(cleanupPath, { recursive: true, force: true }); throw error; }
   }

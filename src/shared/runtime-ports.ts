@@ -1,4 +1,4 @@
-import type { BrowserWindow, OnBeforeRequestListenerDetails, OnBeforeSendHeadersListenerDetails, Session, WebContents } from 'electron';
+import type { BrowserWindow, OnBeforeRequestListenerDetails, OnBeforeSendHeadersListenerDetails, OnHeadersReceivedListenerDetails, Session, WebContents } from 'electron';
 import type { BrowserContext, BrowserSnapshot, CoreEvent, BrowserLayout, ProfileSnapshot, Rectangle, TabSnapshot, WindowSnapshot } from './contracts/browser-core';
 import type { Dispose } from './contracts/envelope';
 import type { BrowserSettings } from './contracts/settings';
@@ -33,6 +33,7 @@ export type RequestDecision = { cancel?: boolean; redirectURL?: string };
 export interface RequestHostPort {
   attach(browserSession: Session, evaluate: (details: OnBeforeRequestListenerDetails) => RequestDecision | Promise<RequestDecision>, onError: (error: unknown) => void): Dispose;
   attachHeaders(browserSession: Session, policy: (details: OnBeforeSendHeadersListenerDetails) => Record<string, string>): Dispose;
+  attachResponseHeaders(browserSession: Session, policy: (details: OnHeadersReceivedListenerDetails) => Record<string, string | string[]>): Dispose;
 }
 export interface BrowserCorePort {
   getProfiles(): ProfileSnapshot[];

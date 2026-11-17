@@ -5,7 +5,17 @@ import { BrowserError } from '../../../shared/errors';
 import { BookmarkRepository } from './repository';
 
 export class BookmarkService {
+  private readonly localListeners = new Set<(profileId: string) => void>();
   constructor(private readonly runtime: FeatureRuntime) {}
+
+  subscribeLocal(listener: (profileId: string) => void) {
+    this.localListeners.add(listener);
+    return () => { this.localListeners.delete(listener); };
+  }
+
+  notifyImported(profileId: string): void {
+    this.runtime.publish('bookmarks.changed', this.list(profileId), { profileId, includePrivate: true });
+  }
 
   list(profileId: string, query?: string): BookmarksState {
     return this.repository(profileId).state(query);
@@ -42,6 +52,7 @@ export class BookmarkService {
 
   private changed(profileId: string, state: BookmarksState): BookmarksState {
     this.runtime.publish('bookmarks.changed', state, { profileId, includePrivate: true });
+    for (const listener of this.localListeners) listener(profileId);
     return state;
   }
 }

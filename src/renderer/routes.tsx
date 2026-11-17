@@ -2,8 +2,17 @@ import { BookmarksPage } from '../features/bookmarks/renderer/bookmarks-page';
 import { HistoryPage } from '../features/history/renderer/history-page';
 import { SettingsPage } from '../features/settings/renderer/settings-page';
 import { DownloadsPage } from '../features/downloads/renderer/downloads-page';
+import type { TabSnapshot, WindowSnapshot } from '../shared/contracts/browser-core';
+import { NewTabPage } from '../features/new-tab/renderer/new-tab-page';
+import { SitePermissionPanel } from '../features/site-settings/renderer/site-permission-panel';
+import { CredentialsPage } from '../features/credentials/renderer/credentials-page';
+import { ExtensionsPage } from '../features/extensions/renderer/extensions-page';
 
-export function renderBrowserPage(url: string) {
+export function renderBrowserPage(url: string, context: { tab: TabSnapshot; window: WindowSnapshot }) {
+  if (url === 'brave://newtab' || url === 'brave://newtab/') return <NewTabPage {...context} />;
+  if (url === 'brave://settings/passwords' || url === 'brave://credentials') return <CredentialsPage />;
+  if (url === 'brave://settings/sites' || url === 'brave://site-settings') return <SitePermissionPanel />;
+  if (url === 'brave://extensions' || url.startsWith('brave://extensions/')) return <ExtensionsPage />;
   if (url === 'brave://bookmarks' || url.startsWith('brave://bookmarks/')) return <BookmarksPage />;
   if (url === 'brave://history' || url.startsWith('brave://history/')) return <HistoryPage />;
   if (url === 'brave://settings' || url.startsWith('brave://settings/')) return <SettingsPage />;

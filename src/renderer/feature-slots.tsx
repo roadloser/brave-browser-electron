@@ -1,6 +1,12 @@
 import { useBrowserStore } from './shell/browser-store';
 import { BookmarkCurrentTabButton } from '../features/bookmarks/renderer/bookmark-current-tab-button';
 import { BookmarksBar } from '../features/bookmarks/renderer/bookmarks-bar';
+import { PermissionNotifications } from '../features/site-settings/renderer/permission-notifications';
+import { CredentialNotifications } from '../features/credentials/renderer/credential-notifications';
+import { SitePermissionButton } from '../features/site-settings/renderer/site-permission-button';
+import { CredentialsButton } from '../features/credentials/renderer/credentials-button';
+import { PageToolsToolbar } from '../features/page-tools/renderer/page-tools-toolbar';
+import { ExtensionActions } from '../features/extensions/renderer/extension-actions';
 
 function useActiveTab() {
   const snapshot = useBrowserStore(state => state.snapshot);
@@ -10,10 +16,20 @@ function useActiveTab() {
 
 export function FeatureToolbar() {
   const tab = useActiveTab();
-  return <BookmarkCurrentTabButton tab={tab} />;
+  return <>
+    <SitePermissionButton tab={tab} />
+    <BookmarkCurrentTabButton tab={tab} />
+    <CredentialsButton tab={tab} />
+    <PageToolsToolbar tab={tab} />
+    {tab && <ExtensionActions tab={tab} />}
+  </>;
 }
 
 export function FeatureBookmarksBar() {
   const tab = useActiveTab();
   return <BookmarksBar tab={tab} />;
+}
+
+export function FeatureNotifications() {
+  return <><PermissionNotifications /><CredentialNotifications /></>;
 }

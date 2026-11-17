@@ -1,0 +1,20 @@
+.leo-panel { height: 100%; display: flex; flex-direction: column; min-height: 0; }
+.leo-navigation, .leo-model-row { display: flex; align-items: center; gap: 5px; padding: 7px 12px; border-bottom: 1px solid var(--color-border); }
+.leo-navigation select, .leo-model-row select { border: 0; color: var(--color-text); background: var(--color-surface); min-width: 0; flex: 1; padding: 5px 0; font-size: 12px; }
+.leo-messages { flex: 1; min-height: 0; overflow: auto; padding: 20px 17px; }
+.leo-introduction { padding: 30px 8px; line-height: 1.7; }
+.leo-introduction h3 { font-size: 21px; font-weight: 550; }
+.leo-detail { font-size: 12px; color: var(--color-muted); line-height: 1.65; }
+.leo-message { margin-bottom: 24px; line-height: 1.75; overflow-wrap: anywhere; }
+.leo-message > div { white-space: pre-wrap; }
+.leo-message.role-user { padding: 13px; background: var(--color-surface-subtle); border-radius: 12px; }
+.leo-message-role { display: block; font-size: 11px; color: var(--color-muted); margin-bottom: 6px; font-weight: 600; }
+.leo-message small { font-size: 11px; color: var(--color-muted); }
+.leo-composer { padding: 10px; margin: 10px; border: 1px solid var(--color-border); border-radius: 13px; background: var(--color-surface); }
+.leo-composer textarea { background: none; color: var(--color-text); border: 0; outline: 0; resize: vertical; width: 100%; min-height: 65px; max-height: 180px; line-height: 1.6; padding: 4px; }
+.leo-composer-actions { display: flex; align-items: center; gap: 5px; }
+.leo-composer-actions > span { flex: 1; font-size: 10px; color: var(--color-muted); }
+.leo-grant { display: flex; align-items: center; gap: 6px; background: var(--color-accent-soft); color: var(--color-accent); border-radius: 6px; padding: 3px 6px; margin-bottom: 6px; font-size: 11px; }
+.leo-grant > span { min-width: 0; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.leo-checkbox { display: flex; align-items: center; gap: 8px; margin: 10px 0; }
+.leo-checkbox input { accent-color: var(--color-accent); }
