@@ -24,6 +24,7 @@ export type NewsState = {
 };
 export const contentServicesCommandSchemas = {
   'news.get': z.object({}),
+  'news.image': z.object({ articleId: idSchema }),
   'news.enable': z.object({ enabled: z.boolean() }),
   'news.refresh': z.object({}),
   'news.cancel': z.object({}),
@@ -37,6 +38,7 @@ export const contentServicesCommandSchemas = {
 };
 export interface ContentServicesCommandResults {
   'news.get': NewsState;
+  'news.image': { dataUrl: string | null };
   'news.enable': NewsState;
   'news.refresh': NewsState;
   'news.cancel': NewsState;
