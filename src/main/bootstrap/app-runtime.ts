@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app } from 'electron';
 import { join } from 'node:path';
 import { BrowserCore } from '../browser-core/browser-core';
 import { registerBrowserIpc } from '../browser-core/register-ipc';
@@ -21,6 +21,7 @@ import { SyncDataCoordinator } from './sync-data';
 import { resolveUiUrl } from './ui-location';
 import { HistoryReadCoordinator } from './history-read';
 import { loadRuntimeAssets } from './runtime-assets';
+import { activateBrowserWindow } from './activate-browser-window';
 
 export class AppRuntime {
   private core?: BrowserCore;
@@ -102,13 +103,7 @@ export class AppRuntime {
 
   async activate(): Promise<void> {
     if (!this.core || this.disposed) return;
-    const windows = BrowserWindow.getAllWindows().filter(window => !window.isDestroyed());
-    if (windows.length === 0) await this.core.openWindow();
-    else {
-      const window = windows[0];
-      if (window.isMinimized()) window.restore();
-      window.focus();
-    }
+    await activateBrowserWindow(this.core);
   }
 
   async dispose(): Promise<void> {
