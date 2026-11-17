@@ -68,6 +68,7 @@ export interface BrowserEvents {
   'newTab.changed': NewTabState;
   'leo.changed': LeoState;
   'extensions.changed': ExtensionsState;
+  'extensions.actionsChanged': { revision: number };
   'shields.changed': ShieldsState;
   'shields.rulesChanged': ShieldRuleState;
   'sync.changed': SyncState;

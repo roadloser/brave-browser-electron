@@ -15,6 +15,8 @@ export type ExtensionsState = {
   networkInterception: 'unavailable-native-shields';
   privateExtensions: 'unsupported';
 };
+export type ExtensionActionSnapshot = { id: string; title: string; badgeText: string; badgeColor: string; hasPopup: boolean };
+export type ExtensionActionsState = { tabId: string; actions: ExtensionActionSnapshot[]; revision: number };
 export const extensionsCommandSchemas = {
   'extensions.get': z.object({}),
   'extensions.chooseDirectory': z.object({}),
@@ -27,6 +29,7 @@ export const extensionsCommandSchemas = {
   'extensions.reload': z.object({ id: idSchema }),
   'extensions.openAction': z.object({ id: idSchema, tabId: idSchema }),
   'extensions.closeAction': z.object({}),
+  'extensions.actions': z.object({ tabId: idSchema }),
 };
 export interface ExtensionsCommandResults {
   'extensions.get': ExtensionsState;
@@ -40,4 +43,5 @@ export interface ExtensionsCommandResults {
   'extensions.reload': ExtensionsState;
   'extensions.openAction': { opened: boolean };
   'extensions.closeAction': void;
+  'extensions.actions': ExtensionActionsState;
 }

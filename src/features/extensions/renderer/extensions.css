@@ -29,4 +29,5 @@
 .extension-dialog [role=alert], .extension-warning { color: var(--color-danger); }
 .extension-action-list { list-style: none; padding: 0; }
 .extension-action-list button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; }
+.extension-action-badge { margin-left: auto; max-width: 70px; overflow: hidden; text-overflow: ellipsis; color: white; font-size: 11px; border-radius: 4px; padding: 2px 5px; }
 .extension-popup-dismiss { position: fixed; right: 20px; top: 48px; z-index: 50; border: 1px solid var(--color-border); border-radius: 7px; padding: 6px 12px; color: var(--color-text); background: var(--color-surface); cursor: pointer; }

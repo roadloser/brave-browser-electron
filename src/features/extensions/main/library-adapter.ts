@@ -69,6 +69,13 @@ export class ExtensionLibraryAdapter implements ExtensionLibraryPort {
     return this.actions.trigger(extensionId, tracked.contents.id);
   }
 
+  actionState(tabId: string) {
+    const tracked = this.tabs.get(tabId);
+    if (!tracked) throw new BrowserError('UNAVAILABLE', '扩展标签状态尚未就绪');
+    return this.actions.snapshot(tracked.contents.id);
+  }
+  onActionsChanged(listener: (revision: number) => void) { return this.actions.subscribe(listener); }
+
   dispose(): void {
     this.disposed = true;
     this.actions.dispose();
