@@ -2,6 +2,10 @@ import { z } from 'zod';
 
 export const rewardsProviderSchema = z.enum(['uphold', 'bitflyer', 'zebpay']);
 export type RewardsProviderName = z.infer<typeof rewardsProviderSchema>;
+export type RewardsAdHistoryItem = {
+  id: string; title: string; body: string; targetUrl: string; shownAt: number;
+  reaction: 'neutral' | 'liked' | 'disliked'; flagged: boolean; canReact: boolean;
+};
 
 export type RewardsState = {
   status: 'unconfigured' | 'ready' | 'registering' | 'registered' | 'refreshing' | 'cancelled' | 'failed' | 'needs-authorization';
@@ -50,6 +54,8 @@ export const rewardsCommandSchemas = {
   'rewards.resumeExternal': z.object({ confirmed: z.literal(true) }),
   'rewards.refreshExternalBalance': z.object({}),
   'rewards.signOutExternal': z.object({ confirmed: z.literal(true) }),
+  'rewards.adsHistory': z.object({}),
+  'rewards.reactToAd': z.object({ placementId: z.string().uuid(), action: z.enum(['like', 'dislike', 'flag']) }),
 };
 export interface RewardsCommandResults {
   'rewards.get': RewardsState;
@@ -68,4 +74,6 @@ export interface RewardsCommandResults {
   'rewards.resumeExternal': RewardsState;
   'rewards.refreshExternalBalance': RewardsState;
   'rewards.signOutExternal': RewardsState;
+  'rewards.adsHistory': RewardsAdHistoryItem[];
+  'rewards.reactToAd': RewardsAdHistoryItem[];
 }

@@ -1,8 +1,8 @@
 import type { BlindedTokenBatch } from './crypto-port';
 
-export type AdEventType = 'view' | 'click' | 'dismiss';
+export type AdEventType = 'view' | 'click' | 'dismiss' | 'upvote' | 'downvote' | 'flag';
 export type AdCreative = {
-  id: string; campaignId: string; creativeSetId: string; title: string; body: string; targetUrl: string;
+  id: string; campaignId: string; creativeSetId: string; advertiserId?: string; title: string; body: string; targetUrl: string;
   startAt: number; endAt: number; priority: number; passThroughRate: number; value: string;
   countries: string[]; segments: string[]; platforms: string[];
   dayparts: { days: string; startMinute: number; endMinute: number }[];
