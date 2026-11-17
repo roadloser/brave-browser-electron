@@ -4,6 +4,7 @@ import { HistoryService } from './service';
 import { registerHistoryIpc } from './register-ipc';
 import { registerVisitRecorder } from './visit-recorder';
 import { createHistorySyncAdapter } from './sync-adapter';
+import { createHistoryReader } from './history-reader';
 
 export const historyFeature: FeatureDefinition = {
   id: 'history',
@@ -13,6 +14,7 @@ export const historyFeature: FeatureDefinition = {
     const stopCommands = registerHistoryIpc(runtime, service);
     const stopRecording = registerVisitRecorder(runtime, service);
     const stopSync = runtime.syncData.register('history', createHistorySyncAdapter(runtime, service));
-    return { id: 'history', dispose() { stopSync(); stopRecording(); stopCommands(); } };
+    const stopRead = runtime.historyRead.register(createHistoryReader(runtime.storage));
+    return { id: 'history', dispose() { stopRead(); stopSync(); stopRecording(); stopCommands(); } };
   },
 };
