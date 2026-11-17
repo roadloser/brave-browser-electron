@@ -13,7 +13,7 @@ export function registerActionState(runtime: FeatureRuntime, adapter: (context: 
     const library = await adapter(context);
     const loaded = new Set(new ExtensionRepository(runtime.storage.open(context.profileId)).list()
       .filter(extension => extension.enabled && extension.status === 'loaded').map(extension => extension.id));
-    const state = library.actionState(tab.id);
+    const state = await library.actionState(tab.id);
     return { ...state, tabId: tab.id, actions: state.actions.filter(action => loaded.has(action.id)) };
   });
 }

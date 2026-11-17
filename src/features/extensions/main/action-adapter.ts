@@ -11,6 +11,7 @@ type ActionInternals = {
   activateClick: (details: ActionDetails) => void;
   onUpdate: () => void;
   getState: () => unknown;
+  handleCRXRequest: (request: Request) => Response | Promise<Response>;
 };
 type LibraryInternals = {
   api: { browserAction: ActionInternals };
@@ -26,6 +27,7 @@ function internals(library: ElectronChromeExtensions): LibraryInternals {
     || typeof candidate.api.browserAction.activateClick !== 'function'
     || typeof candidate.api.browserAction.onUpdate !== 'function'
     || typeof candidate.api.browserAction.getState !== 'function'
+    || typeof candidate.api.browserAction.handleCRXRequest !== 'function'
     || !(candidate.ctx?.store?.tabDetailsCache instanceof Map)
     || typeof candidate.ctx.router?.sendEvent !== 'function') {
     throw new BrowserError('UNAVAILABLE', '扩展依赖接口发生变化，需更新兼容适配后再启用扩展');
@@ -60,7 +62,7 @@ export function createActionAdapter(library: ElectronChromeExtensions, core: Bro
   state.api.browserAction.activateClick = details => { void trigger(details.extensionId, details.tabId).catch(onError); };
   return {
     trigger,
-    snapshot(webContentsId: number) {
+    async snapshot(webContentsId: number) {
       const actionDetails = z.object({
         title: z.string().optional(), text: z.string().optional(),
         color: z.union([z.string(), z.array(z.number().int().min(0).max(255)).length(4)]).optional(),
@@ -76,7 +78,17 @@ export function createActionAdapter(library: ElectronChromeExtensions, core: Bro
           : merged.color ?? '#666666';
         return { id: action.id, title: merged.title ?? '', badgeText: merged.text ?? '', badgeColor: color, hasPopup: Boolean(merged.popup) };
       });
-      return { actions, revision };
+      const withIcons = await Promise.all(actions.map(async action => {
+        if (!/^[a-p]{32}$/.test(action.id)) return action;
+        const url = `crx://extension-icon/${action.id}/32/2?tabId=${webContentsId}`;
+        const response = await state.api.browserAction.handleCRXRequest(new Request(url));
+        if (!response.ok) return action;
+        if (!response.headers.get('content-type')?.startsWith('image/png')) return action;
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        if (bytes.byteLength > 256 * 1024) return action;
+        return { ...action, iconDataUrl: `data:image/png;base64,${Buffer.from(bytes).toString('base64')}` };
+      }));
+      return { actions: withIcons, revision };
     },
     subscribe(listener: (revision: number) => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
     dispose() {
