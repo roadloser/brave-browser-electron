@@ -14,6 +14,9 @@ importers:
       '@brave-intl/challenge-bypass-ristretto-wasm':
         specifier: 2.0.4
         version: 2.0.4
+      '@emurgo/cardano-message-signing-nodejs':
+        specifier: 1.1.0
+        version: 1.1.0
       '@emurgo/cardano-serialization-lib-nodejs':
         specifier: 17.0.0
         version: 17.0.0
@@ -29,6 +32,9 @@ importers:
       '@mozilla/readability':
         specifier: 0.6.0
         version: 0.6.0
+      '@noble/hashes':
+        specifier: 2.4.0
+        version: 2.4.0
       '@polkadot/api':
         specifier: 17.0.2
         version: 17.0.2(bufferutil@4.2.0)(utf-8-validate@6.0.6)
@@ -298,6 +304,9 @@ packages:
     resolution: {integrity: sha512-dfZeox66AvdPtb2lD8OsIIQh12Tp0GNCRUDfBHIKGpbmopZto2/A8nSpYYLoedPIHpqkeblZ/k8OV0Gy7PYuyQ==}
     engines: {node: '>=14.14'}
     hasBin: true
+
+  '@emurgo/cardano-message-signing-nodejs@1.1.0':
+    resolution: {integrity: sha512-PQRc8K8wZshEdmQenNUzVtiI8oJNF/1uAnBhidee5C4o1l2mDLOW+ur46HWHIFKQ6x8mSJTllcjMscHgzju0gQ==}
 
   '@emurgo/cardano-serialization-lib-nodejs@17.0.0':
     resolution: {integrity: sha512-OXayQwnQXhvgEbKSNKuQCpCTrg9LvFDbr+vHPnO/9tVrRhx/Bts+g+9d6TiI15/vAeJ0NkA3tuuiJpPTS5kD6w==}
@@ -2825,6 +2834,8 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
     optional: true
+
+  '@emurgo/cardano-message-signing-nodejs@1.1.0': {}
 
   '@emurgo/cardano-serialization-lib-nodejs@17.0.0': {}
 

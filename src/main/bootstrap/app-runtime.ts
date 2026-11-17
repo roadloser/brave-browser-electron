@@ -18,6 +18,8 @@ import { featureManifest } from './feature-manifest';
 import { migrationManifest } from './migration-manifest';
 import { SyncDataCoordinator } from './sync-data';
 import { resolveUiUrl } from './ui-location';
+import { HistoryReadCoordinator } from './history-read';
+import { loadRuntimeAssets } from './runtime-assets';
 
 export class AppRuntime {
   private core?: BrowserCore;
@@ -69,6 +71,7 @@ export class AppRuntime {
       core, storage, router, publish, pages, syncData: new SyncDataCoordinator(),
       debugger: debuggerHost,
       network: new ContextNetwork(core),
+      historyRead: new HistoryReadCoordinator(),
       syncTabs: {
         snapshot: profileId => core.getSyncTabs(profileId),
         subscribe: listener => core.onEvent(event => {
@@ -78,14 +81,7 @@ export class AppRuntime {
         }),
       },
       secrets: new SecretStore(), requests: new ElectronRequestHost(policies),
-      assets: {
-        credentialPreloadPath: join(app.getAppPath(), 'dist/preload/credentials.cjs'),
-        translationPreloadPath: join(app.getAppPath(), 'dist/preload/translation.cjs'),
-        shieldsPreloadPath: join(app.getAppPath(), 'dist/preload/shields.cjs'),
-        privacyPreloadPath: join(app.getAppPath(), 'dist/preload/privacy.cjs'),
-        privacyServiceWorkerPreloadPath: join(app.getAppPath(), 'dist/preload/privacy-service-worker.cjs'),
-        walletPreloadPath: join(app.getAppPath(), 'dist/preload/wallet.cjs'),
-      },
+      assets: loadRuntimeAssets(app.getAppPath()),
     };
     for (const profile of core.getProfiles()) storage.migrate(profile.id, migrationManifest);
     this.subscriptions.push(registerBrowserIpc(runtime));

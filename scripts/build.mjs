@@ -6,8 +6,7 @@ for (const configFile of [
   'vite.credentials.config.ts',
   'vite.translation.config.ts',
   'vite.shields.config.ts',
-  'vite.privacy.config.ts',
-  'vite.privacy-worker.config.ts',
+  'vite.privacy-world.config.ts',
   'vite.wallet.config.ts',
   'vite.config.ts',
 ]) {
