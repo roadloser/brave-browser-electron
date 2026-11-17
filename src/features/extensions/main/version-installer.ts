@@ -7,6 +7,7 @@ import { BrowserError } from '../../../shared/errors';
 import { fingerprintDirectory } from './manifest';
 import { ExtensionRepository, type StoredExtension } from './extension-repository';
 import type { InstallProposal } from './install-proposals';
+import { retainDeclaredGrants } from './permission-metadata';
 
 async function exists(path: string): Promise<boolean> { return access(path).then(() => true, () => false); }
 
@@ -28,6 +29,9 @@ export class ExtensionVersionInstaller {
     if (await fingerprintDirectory(proposal.directory) !== proposal.hash) throw new BrowserError('CONFLICT', '扩展文件在确认期间已改变，请重新选择');
     const previous = proposal.replacesId ? this.repository.get(proposal.replacesId) : undefined;
     if (proposal.replacesId && !previous) throw new BrowserError('NOT_FOUND', '待更新的扩展已删除');
+    if (previous && (previous.version !== proposal.previousVersion || previous.hash !== proposal.previousHash || previous.enabled !== proposal.wasEnabled)) {
+      throw new BrowserError('CONFLICT', '扩展版本或启用状态在确认期间改变，请重新检查更新');
+    }
     const currentPath = previous?.path ?? join(profilePath(this.profileId), 'extensions', 'installed', proposal.expectedId ?? randomUUID(), 'current');
     const previousPath = join(dirname(currentPath), 'previous');
     await mkdir(dirname(currentPath), { recursive: true, mode: 0o700 });
@@ -47,10 +51,12 @@ export class ExtensionVersionInstaller {
       }
       const record: StoredExtension = {
         id: loaded.id, name: proposal.name, version: proposal.version, description: proposal.description,
-        enabled: true, path: currentPath, permissions: proposal.permissions, hostPermissions: proposal.hostPermissions,
-        status: 'loaded', hasAction: Boolean(proposal.manifest.action || proposal.manifest.browser_action),
-        source: proposal.source, sourcePath: proposal.sourcePath, hash: proposal.hash, optionalGrants: previous?.optionalGrants ?? [],
+        enabled: previous?.enabled ?? true, path: currentPath, permissions: proposal.permissions, hostPermissions: proposal.hostPermissions,
+        status: previous?.enabled === false ? 'disabled' : 'loaded', hasAction: Boolean(proposal.manifest.action || proposal.manifest.browser_action),
+        source: proposal.source, sourcePath: proposal.sourcePath, hash: proposal.hash,
+        optionalGrants: retainDeclaredGrants(previous?.optionalGrants ?? [], proposal.manifest),
       };
+      if (!record.enabled) this.session.extensions.removeExtension(loaded.id);
       this.repository.finishSwap(currentPath, record);
       return record;
     } catch (error) {
