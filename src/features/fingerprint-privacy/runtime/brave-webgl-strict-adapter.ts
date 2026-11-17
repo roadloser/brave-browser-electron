@@ -5,7 +5,7 @@ const nullMethods = [
   'getFramebufferAttachmentParameter', 'getRenderbufferParameter', 'getTexParameter',
   'getUniform', 'getUniformLocation', 'getVertexAttrib',
 ];
-const emptyMethods = ['getProgramInfoLog', 'getShaderInfoLog', 'getShaderSource'];
+const nullableStringMethods = ['getProgramInfoLog', 'getShaderInfoLog', 'getShaderSource'];
 const strictParameters = new Set([
   0x8b8c, 0x1f02, 0x8f36, 0x8f37, 0x8ca6,
   0x8b4a, 0x8a2b, 0x9122, 0x8b4b, 0x8c8a, 0x8b49,
@@ -33,7 +33,7 @@ export function installBraveStrictWebGL(policy: WorldPrivacyPolicy): { coveredAp
       coveredApis.push(`WebGL${version + 1}.${name}`);
     }
     for (const name of nullMethods) patch(name, original => function(this: unknown, ...args) { Reflect.apply(original, this, args); return null; });
-    for (const name of emptyMethods) patch(name, original => function(this: unknown, ...args) { Reflect.apply(original, this, args); return ''; });
+    for (const name of nullableStringMethods) patch(name, original => function(this: unknown, ...args) { Reflect.apply(original, this, args); return null; });
     patch('getAttribLocation', original => function(this: unknown, ...args) { Reflect.apply(original, this, args); return -1; });
     patch('getVertexAttribOffset', original => function(this: unknown, ...args) { Reflect.apply(original, this, args); return 0; });
     for (const name of ['getProgramParameter', 'getShaderParameter']) patch(name, original => function(this: WebGLRenderingContext, ...args) {
