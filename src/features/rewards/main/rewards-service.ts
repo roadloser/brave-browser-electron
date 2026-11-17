@@ -9,12 +9,16 @@ import { RewardsRepository, type RewardsStored } from './rewards-repository';
 import type { RewardsProviderPort } from './provider-port';
 import { SelfCustodyController } from './self-custody-controller';
 import { SolanaBatBalanceAdapter } from './solana-balance-adapter';
+import { AdsTokenService } from './ads/token-service';
+import { RistrettoWasmAdapter } from './ads/ristretto-adapter';
+import { BraveAdsTokenProvider } from './ads/token-provider';
 
 export class RewardsService {
   private readonly running = new Map<string, { controller: AbortController; id: string }>();
   private disposed = false;
   private readonly selfCustody;
   private readonly balanceProvider = new SolanaBatBalanceAdapter();
+  private readonly adsTokens;
   constructor(private readonly runtime: FeatureRuntime, private readonly provider: RewardsProviderPort = new BraveRewardsProvider(new NodeRewardsSigner())) {
     this.selfCustody = new SelfCustodyController(runtime, provider, profileId => this.repository(profileId).get(),
       (profileId, status) => {
@@ -29,6 +33,8 @@ export class RewardsService {
         const stored = this.repository(profileId).get();
         this.save(profileId, { ...stored, account: { ...stored.account, status: stored.linked ? 'connected' : 'unconnected', message }, error: message });
       });
+    this.adsTokens = new AdsTokenService(runtime, new RistrettoWasmAdapter(), new BraveAdsTokenProvider(new NodeRewardsSigner()),
+      profileId => this.repository(profileId).get(), profileId => this.save(profileId, this.repository(profileId).get()));
   }
 
   start(): void {
@@ -41,7 +47,14 @@ export class RewardsService {
     }
   }
 
-  get(context: BrowserContext): RewardsState { this.regular(context); return this.publicState(this.repository(context.profileId).get()); }
+  get(context: BrowserContext): RewardsState {
+    this.regular(context);
+    const state = this.publicState(this.repository(context.profileId).get());
+    return { ...state, ads: { ...state.ads, ...this.adsTokens.state(context.profileId) } };
+  }
+
+  configureAds(context: BrowserContext, endpoint: string, issuerPublicKeys: string[]) { return this.adsTokens.configure(context, endpoint, issuerPublicKeys); }
+  refillConfirmationTokens(context: BrowserContext) { return this.adsTokens.refill(context); }
 
   configure(context: BrowserContext, endpoint: string, serviceKey?: string, solanaRpcUrl?: string): RewardsState {
     this.regular(context);
@@ -106,6 +119,7 @@ export class RewardsService {
   cancel(context: BrowserContext): RewardsState {
     this.regular(context);
     this.selfCustody.cancel(context.profileId);
+    this.adsTokens.cancel(context.profileId);
     this.running.get(context.profileId)?.controller.abort();
     const current = this.repository(context.profileId).get();
     if (this.running.has(context.profileId)) return this.save(context.profileId, {
@@ -127,7 +141,7 @@ export class RewardsService {
     return this.save(context.profileId, { ...stored, account: { status: 'pending', provider: 'solana', message: '请在官方连接页面完成操作；等待服务确认' }, error: undefined });
   }
 
-  dispose(): void { this.disposed = true; this.selfCustody.dispose(); for (const operation of this.running.values()) operation.controller.abort(); this.running.clear(); }
+  dispose(): void { this.disposed = true; this.selfCustody.dispose(); this.adsTokens.dispose(); for (const operation of this.running.values()) operation.controller.abort(); this.running.clear(); }
 
   private async perform(profileId: string, status: 'registering' | 'refreshing',
     operation: (record: RewardsStored, seed: Uint8Array, signal: AbortSignal) => Promise<RewardsStored>): Promise<RewardsState> {
@@ -166,7 +180,9 @@ export class RewardsService {
     return state;
   }
   private save(profileId: string, stored: RewardsStored): RewardsState {
-    const state = this.publicState(this.repository(profileId).save(stored));
+    const state = this.publicState(this.repository(profileId).save({
+      ...stored, ads: { ...stored.ads, ...this.adsTokens.state(profileId) },
+    }));
     this.runtime.publish('rewards.changed', state, { profileId });
     return state;
   }

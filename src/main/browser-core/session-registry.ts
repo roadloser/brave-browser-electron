@@ -11,16 +11,18 @@ export class SessionRegistry {
 
   constructor(private readonly events: PageEventSource) {}
 
-  acquire(profileId: string, isPrivate: boolean): BrowserContext {
-    const existing = [...this.entries.values()].find(entry => entry.context.profileId === profileId && entry.context.isPrivate === isPrivate);
+  acquire(profileId: string, isPrivate: boolean, kind: 'regular' | 'private' | 'tor' = isPrivate ? 'private' : 'regular'): BrowserContext {
+    if ((kind === 'regular') === isPrivate) throw new BrowserError('INVALID_ARGUMENT', '资料上下文类型与私密标识不一致');
+    const existing = [...this.entries.values()].find(entry => entry.context.profileId === profileId && entry.context.kind === kind);
     if (existing) {
       existing.references += 1;
       return { ...existing.context };
     }
-    const contextId = isPrivate ? 'private-' + randomUUID() : 'profile-' + profileId;
-    const context: BrowserContext = { profileId, contextId, isPrivate };
+    const contextId = isPrivate ? kind + '-' + randomUUID() : 'profile-' + profileId;
+    const context: BrowserContext = { profileId, contextId, isPrivate, kind };
     const partition = isPrivate ? 'private:' + contextId : 'persist:profile-' + profileId;
     const browserSession = session.fromPartition(partition, { cache: !isPrivate });
+    if (kind === 'tor') browserSession.enableNetworkEmulation({ offline: true });
     browserSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
     browserSession.setPermissionCheckHandler(() => false);
     this.entries.set(contextId, { context, session: browserSession, references: 1 });

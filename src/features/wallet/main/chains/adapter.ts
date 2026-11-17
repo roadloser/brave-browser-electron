@@ -1,4 +1,5 @@
 import type { WalletAccount, WalletCapability, WalletChain, WalletNetwork } from '../../../../shared/contracts/wallet';
+import type { BitcoinDiscovery, BitcoinPublicAccount } from './bitcoin-discovery';
 
 export type KeyMaterial = { mnemonic: string; index: number };
 export type TransferIntent = { to: string; value: string };
@@ -21,4 +22,6 @@ export interface ChainAdapterPort {
   broadcast(network: WalletNetwork, signed: SignedTransfer): Promise<string>;
   status(network: WalletNetwork, hash: string): Promise<'pending' | 'confirmed' | 'failed' | 'unknown'>;
   dispose(): void | Promise<void>;
+  initializeDiscovery?(key: KeyMaterial, network: WalletNetwork): Promise<BitcoinPublicAccount>;
+  discover?(account: WalletAccount, network: WalletNetwork, state: BitcoinPublicAccount, signal?: AbortSignal): Promise<BitcoinDiscovery>;
 }

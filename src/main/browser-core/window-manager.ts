@@ -28,7 +28,7 @@ export class WindowManager {
     } : { width: 1280, height: 850 };
     const native = new BrowserWindow({
       ...safeBounds, minWidth: 640, minHeight: 480, show: false,
-      title: context.isPrivate ? '私密窗口 · Brave Electron' : 'Brave Electron',
+      title: context.kind === 'tor' ? 'Tor 私密窗口 · Brave Electron' : context.isPrivate ? '私密窗口 · Brave Electron' : 'Brave Electron',
       backgroundColor: '#f4f4f7', titleBarStyle: 'hiddenInset',
       webPreferences: {
         preload: this.options.preloadPath, contextIsolation: true,

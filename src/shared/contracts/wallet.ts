@@ -10,7 +10,11 @@ export const walletNetworkSchema = z.object({
   symbol: z.string().min(1).max(16), decimals: z.number().int().min(0).max(36), testnet: z.boolean(),
 });
 export type WalletNetwork = z.infer<typeof walletNetworkSchema>;
-export type WalletAccount = { id: string; chain: WalletChain; networkId: string; name: string; address: string; index: number };
+export type WalletAccount = {
+  id: string; chain: WalletChain; networkId: string; name: string; address: string; index: number;
+  receiveIndex?: number; changeIndex?: number;
+  discovery?: { status: 'idle' | 'scanning' | 'ready' | 'failed'; scannedAt?: number; error?: string };
+};
 export type WalletCapability = {
   chain: WalletChain; account: boolean; transfer: boolean; messageSign: boolean;
   dapp: boolean; shielded: boolean; reason?: string;

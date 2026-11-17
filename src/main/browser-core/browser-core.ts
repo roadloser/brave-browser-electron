@@ -19,6 +19,7 @@ import type { Rectangle } from '../../shared/contracts/browser-core';
 import { clearExtensionStorage } from './extension-storage';
 import { PageActions } from './page-actions';
 import { NavigationPreparation } from './navigation-preparation';
+import { TorWindowController } from './tor-window-controller';
 
 export type BrowserCoreOptions = {
   storage: StorageHost; uiUrl: string; preloadPath: string;
@@ -39,6 +40,7 @@ export class BrowserCore implements BrowserCorePort {
   private readonly layout: LayoutController;
   private readonly repository: RecoveryRepository;
   private readonly recovery: CoreRecovery;
+  private readonly torWindows: TorWindowController;
   private revision = 0;
   private quitting = false;
   private restoring = false;
@@ -70,6 +72,11 @@ export class BrowserCore implements BrowserCorePort {
       (windowId, url) => { void this.openTab({ windowId, url }).catch(error => this.reportError(error)); });
     this.layout = new LayoutController(tabId => this.tabs.get(tabId));
     this.recovery = new CoreRecovery(this.profiles, this.windows, this.tabs, this.repository, error => this.reportError(error));
+    this.torWindows = new TorWindowController(this.sessions, this.windows, this.events, async window => {
+      await this.openTab({ windowId: window.id });
+      this.ready(window);
+      return this.getWindow(window.id);
+    }, profileId => { this.profiles.get(profileId); this.options.onProfileReady?.(profileId); });
   }
 
   getState(windowId: string): BrowserSnapshot {
@@ -133,6 +140,8 @@ export class BrowserCore implements BrowserCorePort {
   }
 
   closeWindow(windowId: string): void { this.windows.get(windowId).native.close(); }
+  openTorWindow(profileId: string, prepare: (context: BrowserContext, browserSession: Electron.Session) => Promise<void>) { return this.torWindows.open(profileId, prepare); }
+  closeContext(contextId: string): Promise<void> { return this.torWindows.closeContext(contextId); }
   createProfile(name: string) {
     const profile = this.profiles.create(name);
     this.options.onProfileReady?.(profile.id);

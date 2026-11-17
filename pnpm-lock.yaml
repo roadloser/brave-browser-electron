@@ -11,6 +11,9 @@ importers:
       '@base-ui/react':
         specifier: 1.4.1
         version: 1.4.1(@types/react@19.2.2)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@brave-intl/challenge-bypass-ristretto-wasm':
+        specifier: 2.0.4
+        version: 2.0.4
       '@emurgo/cardano-serialization-lib-nodejs':
         specifier: 17.0.0
         version: 17.0.0
@@ -35,6 +38,9 @@ importers:
       '@polkadot/util-crypto':
         specifier: 14.0.3
         version: 14.0.3(@polkadot/util@14.0.3)
+      '@scure/base':
+        specifier: 2.4.0
+        version: 2.4.0
       '@scure/bip32':
         specifier: 2.4.0
         version: 2.4.0
@@ -245,6 +251,9 @@ packages:
     peerDependenciesMeta:
       '@types/react':
         optional: true
+
+  '@brave-intl/challenge-bypass-ristretto-wasm@2.0.4':
+    resolution: {integrity: sha512-3DWk0L3KrpVrhG30OP9prU6kEnatRUn4qAJ2/iOnZN2PMlvpblXnkBrtVNzqs0/86IS4BFqFUME2C5AS31SnMg==}
 
   '@electron-internal/extract-zip@1.0.8':
     resolution: {integrity: sha512-8iajeLFbzNwM0m3AsQZSZgYREWglAImyGvvFSWU34FgMW8sHlzdwj9QKvv9dgN7jMP591EFUF/sLOC3Jl9YIjQ==}
@@ -2720,6 +2729,8 @@ snapshots:
       use-sync-external-store: 1.7.0(react@19.2.8)
     optionalDependencies:
       '@types/react': 19.2.2
+
+  '@brave-intl/challenge-bypass-ristretto-wasm@2.0.4': {}
 
   '@electron-internal/extract-zip@1.0.8': {}
 

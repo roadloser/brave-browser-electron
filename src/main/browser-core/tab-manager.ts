@@ -38,6 +38,7 @@ export class TabManager {
     window.native.contentView.addChildView(view);
     view.setVisible(false);
     view.webContents.setAudioMuted(snapshot.muted);
+    if (window.context.kind === 'tor') view.webContents.setWebRTCIPHandlingPolicy('disable_non_proxied_udp');
     tab.disposeEvents = this.navigation.bind(tab);
     view.webContents.setWindowOpenHandler(details => {
       if (/^https?:/i.test(details.url)) this.popup(window.id, details.url);

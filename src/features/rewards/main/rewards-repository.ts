@@ -21,9 +21,12 @@ export function emptyRewards(): RewardsStored {
     capabilities: [
       { operation: '钱包注册', status: 'implemented', reason: '按Brave v4端点与签名；官方接受条件未运行确认' },
       { operation: '账户状态查询', status: 'implemented', reason: 'GET v4钱包状态；不将账户状态当作余额' },
-      { operation: '外部账户连接', status: 'blocked', reason: '需要对应provider OAuth资格、回调和连接协议' },
+      { operation: 'Solana自托管连接', status: 'implemented', reason: '官方challenge/签名/cookie/页面/服务轮询；须服务返回solana资格' },
+      { operation: '其他外部账户连接', status: 'blocked', reason: '对应provider OAuth资格、回调与连接协议仍未接入' },
+      { operation: '广告盲签token', status: 'implemented', reason: '同源WASM随机/盲化/证明/去盲；独立issuer信任与服务接受仍需确认' },
       { operation: '广告资格与展示确认', status: 'blocked', reason: '需Brave Ads目录、资格与匿名确认token协议，未用页面广告替代' },
-      { operation: '余额和结算', status: 'blocked', reason: '余额来自连接的外部wallet provider，缺少对应凭据/协议' },
+      { operation: 'Solana BAT余额', status: 'implemented', reason: '仅服务确认连接地址后通过已配置RPC取得实际token余额' },
+      { operation: '其他余额和结算', status: 'blocked', reason: '对应wallet provider与广告payment token结算尚未接入' },
     ],
     lastRequestId: null, revision: 0, serviceKeyCipher: null, seedCipher: null,
   };

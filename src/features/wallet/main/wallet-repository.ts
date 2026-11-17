@@ -1,6 +1,7 @@
 import type { WalletAccount, WalletNetwork, WalletRequest, WalletTransaction } from '../../../shared/contracts/wallet';
 import type { Migration, ProfileDatabase } from '../../../shared/runtime-ports';
 import type { PreparedTransfer } from './chains/adapter';
+import type { BitcoinPublicAccount } from './chains/bitcoin-discovery';
 
 export type VaultRecord = { version: 1; salt: string; iv: string; tag: string; ciphertext: string };
 export type WalletDocument = {
@@ -8,6 +9,7 @@ export type WalletDocument = {
   requests: WalletRequest[]; transactions: WalletTransaction[]; grants: Record<string, string[]>;
   pending: Record<string, { prepared?: PreparedTransfer; message?: string; messageBase64?: string; providerMethod?: string; providerPayload?: unknown }>;
   revision: number;
+  bitcoinAccounts: Record<string, BitcoinPublicAccount>;
 };
 export const walletMigrations: readonly Migration[] = [{
   id: 'wallet', version: 1,
