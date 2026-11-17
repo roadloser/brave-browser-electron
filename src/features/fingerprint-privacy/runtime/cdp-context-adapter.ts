@@ -5,7 +5,8 @@ import { BrowserError } from '../../../shared/errors';
 import { cdpWorldSource } from './cdp-bridge-source';
 import { BootstrapPauseController } from './bootstrap-pause-controller';
 import { WorldControllerHost } from './world-controller-host';
-import { parsePrivacyStorageKey, type PrivacyStorageScope } from './storage-key';
+import { parsePrivacyStorageKey } from './storage-key';
+import { resolvePolicyScope, type PrivacyPolicyScope } from './policy-scope';
 import type { WorldInstallResult, WorldPrivacyPolicy } from './world-types';
 import type { RuntimeOutcome, RuntimeOutcomeUpdate } from './runtime-outcome';
 
@@ -25,7 +26,7 @@ export class CdpPrivacyContextAdapter {
   private controllers!: WorldControllerHost;
 
   constructor(private readonly tab: TabSnapshot, private readonly debuggerHost: DebuggerHostPort,
-    private readonly policy: (scope: PrivacyStorageScope, kind: ExecutionContextKind) => WorldPrivacyPolicy,
+    private readonly policy: (scope: PrivacyPolicyScope, kind: ExecutionContextKind) => WorldPrivacyPolicy,
     private readonly worldSource: string,
     private readonly coverage: (update: RuntimeOutcomeUpdate) => void) {
   }
@@ -126,7 +127,7 @@ export class CdpPrivacyContextAdapter {
             this.record(`${childSession}:target`, { context: kind, applied: false, firstRead: 'failed', reason: 'threaded Worklet未取得创建者顶层真实origin，拒绝以module URL替代' });
             return;
           }
-          const policy = this.policy({ origin: this.rootOrigin, topLevelSite: this.rootOrigin, nonce: null }, kind);
+          const policy = this.policy(resolvePolicyScope({ origin: this.rootOrigin, topLevelSite: this.rootOrigin, nonce: null }, kind, this.rootOrigin), kind);
           const result = await this.debugger.send<{ result?: { objectId?: string } }>('Runtime.evaluate', {
             expression: cdpWorldSource(this.worldSource, policy), returnByValue: false,
           }, childSession);
@@ -138,15 +139,10 @@ export class CdpPrivacyContextAdapter {
         }
         const scope = await this.debugger.send<{ storageKey: string }>('Storage.getStorageKey', {}, childSession);
         const parsed = parsePrivacyStorageKey(scope.storageKey);
-        if (parsed && kind !== 'iframe') parsed.nonce = null;
-        if (parsed && kind === 'dedicated-worker') {
-          if (!this.rootOrigin) throw new BrowserError('UNAVAILABLE', 'Dedicated Worker缺少真实创建者top-frame origin');
-          parsed.origin = this.rootOrigin;
-        }
         if (!parsed) {
           this.record(`${childSession}:target`, { context: kind, applied: false, reason: '目标未提供可映射的真实StorageKey' });
         } else {
-          const policy = this.policy(parsed, kind);
+          const policy = this.policy(resolvePolicyScope(parsed, kind, this.rootOrigin), kind);
           const result = await this.debugger.send<{ result?: { objectId?: string } }>('Runtime.evaluate', {
             expression: cdpWorldSource(this.worldSource, policy), returnByValue: false, awaitPromise: false,
           }, childSession);
@@ -182,7 +178,7 @@ export class CdpPrivacyContextAdapter {
         return;
       }
       const result = await this.debugger.send<{ result?: { objectId?: string } }>('Runtime.evaluate', {
-        contextId: context.id, expression: cdpWorldSource(this.worldSource, this.policy(parsed, kind)), returnByValue: false,
+        contextId: context.id, expression: cdpWorldSource(this.worldSource, this.policy(resolvePolicyScope(parsed, kind, this.rootOrigin, kind === 'worklet'), kind)), returnByValue: false,
       }, sessionId);
       const installed = await this.controllerReport(this.key(sessionId, context.id), result.result?.objectId, sessionId, context.id);
       this.record(this.key(sessionId, context.id), { context: kind, applied: installed.installed, coveredApis: installed.coveredApis, failures: installed.failures, firstRead: 'unknown',
@@ -194,14 +190,16 @@ export class CdpPrivacyContextAdapter {
     const context = this.contexts.get(this.key(sessionId, contextId));
     if (!context?.auxData?.frameId || !context.auxData.isDefault) return;
     const kind: ExecutionContextKind = !sessionId && context.auxData.frameId === this.rootFrameId ? 'window' : 'iframe';
-    const result = await this.debugger.send<{ storageKey: string }>('Storage.getStorageKey', { frameId: context.auxData.frameId }, sessionId);
-    const scope = parsePrivacyStorageKey(result.storageKey);
+    const tree = await this.debugger.send<{ frameTree: { frame: { url: string; securityOrigin?: string } } }>('Page.getFrameTree');
+    this.updateRootOrigin(tree.frameTree.frame.url, tree.frameTree.frame.securityOrigin);
+    const storageResult = await this.debugger.send<{ storageKey: string }>('Storage.getStorageKey', { frameId: context.auxData.frameId }, sessionId);
+    const scope = parsePrivacyStorageKey(storageResult.storageKey);
     if (!scope) {
       this.record(this.key(sessionId, contextId), { context: kind, applied: false, firstRead: 'failed', reason: '首读暂停未取得合法StorageKey' });
       return;
     }
     const result = await this.debugger.send<{ result?: { objectId?: string } }>('Debugger.evaluateOnCallFrame', {
-      callFrameId, expression: cdpWorldSource(this.worldSource, this.policy(scope, kind)), returnByValue: false, timeout: 4000,
+      callFrameId, expression: cdpWorldSource(this.worldSource, this.policy(resolvePolicyScope(scope, kind, this.rootOrigin), kind)), returnByValue: false, timeout: 4000,
     }, sessionId);
     const installed = await this.controllerReport(this.key(sessionId, contextId), result.result?.objectId, sessionId, contextId);
     this.record(this.key(sessionId, contextId), { context: kind, applied: installed.installed, coveredApis: installed.coveredApis,

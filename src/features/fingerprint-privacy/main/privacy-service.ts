@@ -147,7 +147,7 @@ export class PrivacyService {
     if (!site || this.effectiveMode(tab, site) === 'off') return;
     if (this.cdpContexts.has(tab.id)) return;
     const adapter = new CdpPrivacyContextAdapter(tab, this.runtime.debugger, (scope, kind) => {
-      const sourceSite = resolvePrivacySite(scope.origin);
+      const sourceSite = resolvePrivacySite(scope.policyOrigin);
       if (!sourceSite) return { mode: 'off', token: null, scope: sourceSite };
       const mode = this.effectiveMode(tab, sourceSite);
       if (mode === 'off') return { mode, token: null, scope: sourceSite };
