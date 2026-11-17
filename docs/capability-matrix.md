@@ -14,9 +14,10 @@
 | SQLite | 已选择 Node-API 预构建路线 | 无 | 不复用别的产品制品作为运行证明 |
 | Shields | Ghostery映射层、规则/页面过滤已装配 | 无 | 原生引擎语义/HTTP method/scriptlet时序等差异；首次失败阻断 |
 | 扩展 | 安装/权限/更新回滚/action已装配 | 无 | 网络拦截受限；商店原生添加桥、清空/取消等仍在收口 |
-| 指纹 | 执行上下文能力取证中 | 无 | 不将可注入脚本等同 Brave 覆盖 |
+| 指纹 | Randen/Canvas/Audio/Navigator/Screen/WebGL及真实作用域已映射，持续P0补齐 | 无 | 字体Blink family选择与main Paint首读仍有具体差异；单一IIFE与覆盖矩阵不等于已验证 |
 | 官方服务 | 协议/资格分别推进 | 无 | 不伪造余额、连接或官方互通 |
 | Sync | 书签/历史/设置/密码/跨设备标签协议已装配 | 无 | 真正GetUpdates/Commit/Nigori；字段与旧协议差异、官方资格另验 |
 | Wallet | 六链adapter、确认和UI已接入，仍在补链行为 | 无 | Zcash软件屏蔽制品、HD发现、各链站点方法未齐 |
 | Rewards | 注册/账户查询已装配 | 无 | 广告/外部账户/结算未齐；余额保持unknown |
-| Tor/VPN | 组件交付关口 | 无 | 不以 SOCKS 代理当系统 VPN |
+| Tor | 用户批准上下文隔离路线，组件/控制/生命周期已装配 | 无 | 逐站点电路差异已公开；制品与DNS等仍待观察 |
+| VPN | 原helper依赖/系统IKEv2候选取舍 | 无 | 候选未装配，不以浏览器代理当系统VPN |
