@@ -7,6 +7,7 @@ import { IconButton } from '../../../renderer/components/icon-button';
 import { useNewTab } from './use-new-tab';
 import { ShortcutGrid } from './shortcut-grid';
 import { BackgroundPicker } from './background-picker';
+import { NewsPanel } from '../../content-services/renderer/news-panel';
 import './new-tab.css';
 
 export function NewTabPage({ tab, window: currentWindow }: { tab: TabSnapshot; window: WindowSnapshot }) {
@@ -47,6 +48,7 @@ export function NewTabPage({ tab, window: currentWindow }: { tab: TabSnapshot; w
         {currentWindow.isPrivate && <p className="private-description">此窗口的浏览记录不会保存到资料。下载的文件和您主动保存的内容仍会保留。</p>}
         {error && <ErrorNotice message={error} onDismiss={() => setError('')} />}
       </div>
+      <NewsPanel tab={tab} />
       <footer className="new-tab-footer"><span>{image && !imageFailed ? image.name : ''}</span>
         <IconButton label="自定义新标签页" onClick={() => setCustomizing(true)}><SlidersHorizontal size={19} /></IconButton>
       </footer>

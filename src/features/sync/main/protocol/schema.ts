@@ -7,6 +7,10 @@ message EncryptedData { optional string key_name=1; optional string blob=2; }
 message UniquePosition { optional bytes value=1; optional bytes compressed_value=2; optional uint64 uncompressed_length=3; optional bytes custom_compressed_v1=4; }
 message BookmarkSpecifics { optional string url=1; optional string legacy_canonicalized_title=3; optional int64 creation_time_us=4; optional string guid=10; optional string full_title=11; optional string parent_guid=14; optional int32 type=15; optional UniquePosition unique_position=16; }
 message PreferenceSpecifics { optional string name=1; optional string value=2; }
+message GlobalIdDirective { repeated int64 global_id=1; optional int64 start_time_usec=2; optional int64 end_time_usec=3; }
+message TimeRangeDirective { optional int64 start_time_usec=1; optional int64 end_time_usec=2; optional string app_id=3; }
+message UrlDirective { optional string url=1; optional int64 end_time_usec=2; optional string app_id=3; }
+message HistoryDeleteDirectiveSpecifics { optional GlobalIdDirective global_id_directive=1; optional TimeRangeDirective time_range_directive=2; optional UrlDirective url_directive=3; }
 message HistorySpecifics {
  optional int64 visit_time_windows_epoch_micros=1; optional string originator_cache_guid=2;
  message RedirectEntry { optional int64 originator_visit_id=1; optional string url=2; optional string title=3; optional bool hidden=4; optional int32 redirect_type=5; }
@@ -22,7 +26,7 @@ message NigoriSpecifics {
  optional int32 custom_passphrase_key_derivation_method=45; optional string custom_passphrase_key_derivation_salt=46;
 }
 message DeviceInfoSpecifics { optional string cache_guid=1; optional string client_name=2; optional string sync_user_agent=4; optional string signin_scoped_device_id=7; optional int64 last_updated_timestamp=8; optional int32 pulse_interval_in_minutes=13; optional int32 os_type=19; optional int32 device_form_factor=20; }
-message EntitySpecifics { optional EncryptedData encrypted=1; optional BookmarkSpecifics bookmark=32904; optional PreferenceSpecifics preference=37702; optional NigoriSpecifics nigori=47745; optional DeviceInfoSpecifics device_info=154522; optional HistorySpecifics history=963985; }
+message EntitySpecifics { optional EncryptedData encrypted=1; optional BookmarkSpecifics bookmark=32904; optional PreferenceSpecifics preference=37702; optional NigoriSpecifics nigori=47745; optional HistoryDeleteDirectiveSpecifics history_delete_directive=150251; optional DeviceInfoSpecifics device_info=154522; optional HistorySpecifics history=963985; }
 message SyncEntity {
  optional string id_string=1; optional string parent_id_string=2; optional int64 version=4; optional int64 mtime=5; optional int64 ctime=6;
  optional string name=7; optional string non_unique_name=8; optional string server_defined_unique_tag=10; optional bool deleted=18;

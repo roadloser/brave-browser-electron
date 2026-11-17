@@ -4,6 +4,7 @@ import type { SyncLocalItem, SyncLocalType } from '../../../../shared/sync-data-
 export type Specifics = {
  encrypted?: EncryptedData; bookmark?: Record<string, unknown>; preference?: { name?: string; value?: string };
  history?: Record<string, unknown>; nigori?: NigoriSpecifics; device_info?: Record<string, unknown>;
+ history_delete_directive?: { global_id_directive?: { global_id?: string[]; start_time_usec?: string; end_time_usec?: string }; time_range_directive?: { start_time_usec?: string; end_time_usec?: string; app_id?: string }; url_directive?: { url?: string; end_time_usec?: string; app_id?: string } };
 };
 export type NigoriSpecifics = {
  encryption_keybag?: EncryptedData; keybag_is_frozen?: boolean; encrypt_everything?: boolean; passphrase_type?: number;

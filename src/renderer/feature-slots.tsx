@@ -8,6 +8,8 @@ import { CredentialsButton } from '../features/credentials/renderer/credentials-
 import { PageToolsToolbar } from '../features/page-tools/renderer/page-tools-toolbar';
 import { ExtensionActions } from '../features/extensions/renderer/extension-actions';
 import { LeoButton } from '../features/leo/renderer/leo-button';
+import { ShieldsPanel } from '../features/shields/renderer/shields-panel';
+import { TalkButton } from '../features/content-services/renderer/talk-panel';
 
 function useActiveTab() {
   const snapshot = useBrowserStore(state => state.snapshot);
@@ -20,10 +22,12 @@ export function FeatureToolbar() {
   return <>
     <SitePermissionButton tab={tab} />
     <BookmarkCurrentTabButton tab={tab} />
+    {tab && <ShieldsPanel tab={tab} />}
     <CredentialsButton tab={tab} />
     <PageToolsToolbar tab={tab} />
     {tab && <ExtensionActions tab={tab} />}
     <LeoButton tab={tab} />
+    <TalkButton />
   </>;
 }
 

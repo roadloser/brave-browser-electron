@@ -17,9 +17,6 @@ importers:
       '@ghostery/adblocker-content':
         specifier: 2.20.3
         version: 2.20.3
-      '@ghostery/adblocker-electron':
-        specifier: 2.20.3
-        version: 2.20.3(electron@43.7.5)
       '@ghostery/adblocker-extended-selectors':
         specifier: 2.20.3
         version: 2.20.3
@@ -430,16 +427,6 @@ packages:
 
   '@ghostery/adblocker-content@2.20.3':
     resolution: {integrity: sha512-tuV4T5wPbfVdcY6dnM1dfaXSazpStx7ZI54bd2l9r93yPZfZoVsHR1Uxf/A8ETBMXJPQ92JMDQzmV8hOgpyq+w==}
-
-  '@ghostery/adblocker-electron-preload@2.20.3':
-    resolution: {integrity: sha512-374UtV7B9XuN6x8zhJf0OqFQ/JYJAZeLFusQ8danvkgf7fz6YkBWMhr3gfxODFCRXGc99eYhboh5QIyvPIgnfA==}
-    peerDependencies:
-      electron: '>11'
-
-  '@ghostery/adblocker-electron@2.20.3':
-    resolution: {integrity: sha512-M89xEUh6PrSRZ0YURA7Ra6Wz9JrrNZJIQcrfmB3NfpdJn1qve3GylcHstc52iqJgyqvO0xkD03BctyMdTRWS7A==}
-    peerDependencies:
-      electron: '>11'
 
   '@ghostery/adblocker-extended-selectors@2.20.3':
     resolution: {integrity: sha512-cwloe8GXCoiLor685fOCsx3PyDFvsVnYdCO/MMAyZ4Dr5q8cgSHijqqYSU2fWgoWfz1Fhfepj7mGbQnrvUR37w==}
@@ -2212,18 +2199,6 @@ snapshots:
   '@ghostery/adblocker-content@2.20.3':
     dependencies:
       '@ghostery/adblocker-extended-selectors': 2.20.3
-
-  '@ghostery/adblocker-electron-preload@2.20.3(electron@43.7.5)':
-    dependencies:
-      '@ghostery/adblocker-content': 2.20.3
-      electron: 43.7.5
-
-  '@ghostery/adblocker-electron@2.20.3(electron@43.7.5)':
-    dependencies:
-      '@ghostery/adblocker': 2.20.3
-      '@ghostery/adblocker-electron-preload': 2.20.3(electron@43.7.5)
-      electron: 43.7.5
-      tldts-experimental: 7.4.10
 
   '@ghostery/adblocker-extended-selectors@2.20.3': {}
 
