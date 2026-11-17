@@ -5,7 +5,7 @@ export interface ExtensionLibraryPort {
   readonly profileId: string;
   synchronize(state: BrowserSnapshot): void;
   activate(extensionId: string, tabId: string): Promise<boolean>;
-  actionState(tabId: string): { actions: ExtensionActionSnapshot[]; revision: number };
+  actionState(tabId: string): Promise<{ actions: ExtensionActionSnapshot[]; revision: number }>;
   onActionsChanged(listener: (revision: number) => void): () => void;
   dispose(): void;
 }

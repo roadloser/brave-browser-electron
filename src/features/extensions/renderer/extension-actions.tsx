@@ -25,7 +25,10 @@ export function ExtensionActions({ tab }: { tab?: TabSnapshot }) {
             const result = await extensions.run(() => browserClient.command('extensions.openAction', { id: extension.id, tabId: tab.id }));
             if (result) { setMenuOpen(false); setPopupOpen(result.opened); }
           }} title={dynamic.actions.find(action => action.id === extension.id)?.title || extension.name}>
-            <Puzzle size={16} />{dynamic.actions.find(action => action.id === extension.id)?.title || extension.name}
+            {dynamic.actions.find(action => action.id === extension.id)?.iconDataUrl
+              ? <img src={dynamic.actions.find(action => action.id === extension.id)?.iconDataUrl} alt="" width={20} height={20} />
+              : <Puzzle size={16} />}
+            {dynamic.actions.find(action => action.id === extension.id)?.title || extension.name}
             {dynamic.actions.find(action => action.id === extension.id)?.badgeText && <span className="extension-action-badge"
               style={{ backgroundColor: dynamic.actions.find(action => action.id === extension.id)?.badgeColor }}>
               {dynamic.actions.find(action => action.id === extension.id)?.badgeText}

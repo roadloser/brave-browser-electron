@@ -15,7 +15,7 @@ export type ExtensionsState = {
   networkInterception: 'unavailable-native-shields';
   privateExtensions: 'unsupported';
 };
-export type ExtensionActionSnapshot = { id: string; title: string; badgeText: string; badgeColor: string; hasPopup: boolean };
+export type ExtensionActionSnapshot = { id: string; title: string; badgeText: string; badgeColor: string; hasPopup: boolean; iconDataUrl?: string };
 export type ExtensionActionsState = { tabId: string; actions: ExtensionActionSnapshot[]; revision: number };
 export const extensionsCommandSchemas = {
   'extensions.get': z.object({}),
