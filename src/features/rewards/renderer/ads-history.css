@@ -1,0 +1,6 @@
+.ads-history-modal { width: min(760px, 90vw); }
+.ads-history-list { display: grid; gap: 14px; max-height: 65vh; overflow: auto; }
+.ads-history-item { display: grid; gap: 8px; padding: 16px; border: 1px solid var(--border-color, #d5d7de); border-radius: 12px; }
+.ads-history-item time { opacity: .65; font-size: 12px; }
+.ads-history-item p { margin: 0; }
+.ads-history-item button[aria-pressed="true"] { background: var(--accent-color, #4c54d2); color: white; }

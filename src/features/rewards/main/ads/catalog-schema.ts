@@ -43,7 +43,7 @@ export function parseCatalog(input: unknown, now = Date.now()): AdsCatalog {
         const url = new URL(parsedPayload.data.targetUrl);
         if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) continue;
         creatives.push({
-          id: creative.creativeInstanceId, campaignId: campaign.campaignId, creativeSetId: set.creativeSetId,
+          id: creative.creativeInstanceId, campaignId: campaign.campaignId, creativeSetId: set.creativeSetId, advertiserId: campaign.advertiserId,
           ...parsedPayload.data, startAt, endAt, priority: campaign.priority, passThroughRate: campaign.ptr, value: set.value,
           countries: campaign.geoTargets.map(target => target.code), segments: set.segments.map(segment => segment.code), platforms: set.oses.map(platform => platform.code),
           dayparts: campaign.dayParts.map(part => ({ days: part.dow, startMinute: part.startMinute, endMinute: part.endMinute })),

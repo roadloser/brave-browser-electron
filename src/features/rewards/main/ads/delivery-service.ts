@@ -17,6 +17,8 @@ import { NotificationSelection } from './notification-selection';
 import { redeemScheduledPayments } from './redemption-schedule';
 import { ElectronAdsNotificationAdapter } from './notification-adapter';
 import { adsDeliveryState } from './delivery-state';
+import { AdsHistoryService } from './history-service';
+import { AdReactionRepository } from './reaction-repository';
 
 export class AdsDeliveryService {
   private readonly refreshing = new Map<string, AbortController>();
@@ -29,12 +31,14 @@ export class AdsDeliveryService {
   private release?: () => void;
   private disposed = false;
   private ticking = false;
+  readonly history: AdsHistoryService;
   constructor(private readonly runtime: FeatureRuntime, private readonly rewards: (profileId: string) => RewardsStored,
     private readonly notify: (profileId: string) => RewardsState, private readonly refill: (context: BrowserContext) => Promise<RewardsState>, private readonly cancelRefill: (profileId: string) => void) {
     const crypto = new RistrettoWasmAdapter(); const provider = new BraveAdsConfirmationProvider();
     this.confirmations = new AdsConfirmationService(runtime, crypto, provider, profileId => { if (!this.disposed) this.notify(profileId); });
     this.payments = new AdsPaymentService(runtime, crypto, provider, profileId => { if (!this.disposed) this.notify(profileId); });
     this.notification = new ElectronAdsNotificationAdapter(runtime);
+    this.history = new AdsHistoryService(runtime, this.confirmations);
   }
   start(): void {
     this.timer = setInterval(() => { void this.tick(); }, 60_000);
@@ -69,7 +73,7 @@ export class AdsDeliveryService {
     return this.notify(context.profileId);
   }
   async retry(context: BrowserContext): Promise<RewardsState> {
-    this.regular(context); await this.recoverEvents(context); await this.confirmations.resume(context, true); return this.notify(context.profileId);
+    this.regular(context); await this.recoverEvents(context); await this.history.resume(context); await this.confirmations.resume(context, true); return this.notify(context.profileId);
   }
   async redeem(context: BrowserContext): Promise<RewardsState> {
     this.regular(context); const paymentId = this.rewards(context.profileId).paymentId;
@@ -103,6 +107,7 @@ export class AdsDeliveryService {
     if (!repository.catalog() || repository.catalog()!.expiresAt <= Date.now() || !repository.issuers() || repository.issuers()!.expiresAt <= Date.now()) await this.refresh(context);
     if (this.disposed || !repository.settings().enabled || this.refreshing.has(context.profileId)) return;
     await this.recoverEvents(context); await this.confirmations.resume(context);
+    await this.history.resume(context);
     await redeemScheduledPayments(context, this.rewards(context.profileId).paymentId!, repository, this.payments);
     if (this.notifications.has(context.profileId)) return;
     const windowId = this.notification.findWindow(context);
@@ -111,7 +116,8 @@ export class AdsDeliveryService {
     if (tokens.count() < 3 && tokens.configuration()?.endpoint === 'https://mywallet.ads.brave.com') await this.refill(context);
     if (tokens.count() < 3 || this.disposed || !repository.settings().enabled) return;
     const catalog = repository.catalog(); if (!catalog) return;
-    const creative = this.selection.select(context.profileId, catalog, repository.settings(), repository.placements());
+    const reactions = new AdReactionRepository(this.runtime.storage.open(context.profileId));
+    const creative = this.selection.select(context.profileId, { ...catalog, creatives: catalog.creatives.filter(candidate => !reactions.excluded(candidate)) }, repository.settings(), repository.placements());
     if (!creative) return;
     const placement: AdPlacement = { id: randomUUID(), windowId, creative, catalogId: catalog.id, country: repository.settings().country!, createdAt: Date.now() };
     repository.place(placement);

@@ -17,19 +17,19 @@ export class AdsConfirmationService {
     private readonly provider: AdsConfirmationProviderPort, private readonly notify: (profileId: string) => void) {}
 
   busy(profileId: string): boolean { return this.running.has(profileId); }
-  async record(context: BrowserContext, placement: AdPlacement, type: AdEventType): Promise<void> {
+  async record(context: BrowserContext, placement: AdPlacement, type: AdEventType, eventId = placement.id): Promise<void> {
     const repository = this.repository(context.profileId);
-    if (repository.confirmation(placement.id, type)) return;
+    if (repository.confirmation(eventId, type)) return;
     await this.crypto.initialize();
     if (this.disposed) return;
-    if (repository.confirmation(placement.id, type)) return;
+    if (repository.confirmation(eventId, type)) return;
     const confirmation = repository.reserve(repository.issuers()?.confirmations ?? [], token => {
       const id = randomUUID(); const paymentBatch = this.crypto.create(1);
       const payload = confirmationPayload(placement, type, id, paymentBatch.blindedTokens[0], token.publicKey);
       const signed = this.crypto.credential(this.runtime.secrets.decrypt(token.tokenCipher), payload);
       const credential = paddedBase64Url(JSON.stringify({ signature: signed.signature, t: signed.tokenPreimage }));
       const material: ConfirmationMaterial = { paymentBatch, payload, credential };
-      return { id, placementId: placement.id, type, createdAt: Date.now(), materialCipher: this.runtime.secrets.encrypt(JSON.stringify(material)), status: 'prepared', attempts: 0, retryAt: 0 };
+      return { id, placementId: eventId, type, createdAt: Date.now(), materialCipher: this.runtime.secrets.encrypt(JSON.stringify(material)), status: 'prepared', attempts: 0, retryAt: 0 };
     });
     if (!confirmation) throw new BrowserError('UNAVAILABLE', '没有可用确认token；真实广告事件已保留，未伪造确认');
     this.notify(context.profileId);

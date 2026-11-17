@@ -14,6 +14,7 @@ export function selectNotification(catalog: AdsCatalog, settings: AdsDeliverySet
   const current = new Date(now); const minute = current.getHours() * 60 + current.getMinutes();
   const candidates = catalog.creatives.filter(creative => {
     if (creative.priority <= 0 || creative.startAt > now || creative.endAt <= now || !creative.segments.includes('untargeted')) return false;
+    if (viewed.some(placement => placement.creative.id === creative.id && placement.shownAt! > now - hour)) return false;
     if (!creative.countries.some(country => country === settings.country || country === settings.subdivision)) return false;
     if (creative.platforms.length && !creative.platforms.includes('macos')) return false;
     if (creative.dayparts.length && !creative.dayparts.some(part => part.days.includes(String(current.getDay())) && minute >= part.startMinute && minute <= part.endMinute)) return false;
@@ -23,7 +24,7 @@ export function selectNotification(catalog: AdsCatalog, settings: AdsDeliverySet
     return (caps.campaignDaily === 0 || campaignHistory.filter(placement => placement.shownAt! > now - day).length < caps.campaignDaily)
       && (caps.daily === 0 || setHistory.filter(placement => placement.shownAt! > now - day).length < caps.daily)
       && (caps.weekly === 0 || setHistory.filter(placement => placement.shownAt! > now - 7 * day).length < caps.weekly)
-      && (caps.monthly === 0 || setHistory.filter(placement => placement.shownAt! > now - 30 * day).length < caps.monthly)
+      && (caps.monthly === 0 || setHistory.filter(placement => placement.shownAt! > now - 28 * day).length < caps.monthly)
       && (caps.total === 0 || setHistory.length < caps.total) && random() < creative.passThroughRate;
   });
   if (!candidates.length) return null;
