@@ -49,7 +49,6 @@ export class SettingsService {
     this.revisions.set(profileId, (this.revisions.get(profileId) ?? 0) + 1);
     this.apply(profileId);
     this.runtime.publish('settings.changed', this.get(profileId), { profileId, includePrivate: true });
-    for (const listener of this.listeners) listener(profileId);
   }
   async chooseDownloadDirectory(context: CommandContext) {
     const result = await dialog.showOpenDialog(this.runtime.core.getNativeWindow(context.windowId), {

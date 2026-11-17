@@ -1,8 +1,13 @@
 import { ipcRenderer } from 'electron';
 
 const channel = 'brave:credentials:submitted';
+let documentToken = '';
+ipcRenderer.on('brave:credentials:document-token', (_event, token: unknown) => {
+  if (typeof token === 'string') documentToken = token;
+});
+window.addEventListener('DOMContentLoaded', () => ipcRenderer.send('brave:credentials:document'), { once: true });
 window.addEventListener('submit', event => {
-  if (!event.isTrusted || !(event.target instanceof HTMLFormElement)) return;
+  if (!documentToken || !event.isTrusted || !(event.target instanceof HTMLFormElement)) return;
   const form = event.target;
   const password = [...form.querySelectorAll<HTMLInputElement>('input[type="password"]')].find(input => !input.disabled && input.value && input.autocomplete !== 'new-password')
     ?? form.querySelector<HTMLInputElement>('input[type="password"]');
@@ -13,5 +18,6 @@ window.addEventListener('submit', event => {
   ipcRenderer.send(channel, {
     origin: location.origin, url: location.href,
     username: username?.value ?? '', password: password.value, capturedAt: Date.now(),
+    documentToken,
   });
 }, true);

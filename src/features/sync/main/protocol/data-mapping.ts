@@ -4,8 +4,9 @@ import type { BookmarkNode } from '../../../../shared/contracts/bookmarks';
 import { BrowserError } from '../../../../shared/errors';
 import { encodeProto } from './schema';
 import type { Specifics, SyncEntity } from './types';
+import type { SecretStorePort } from '../../../../shared/runtime-ports';
 
-export const dataTypeIds = { bookmarks: 32904, settings: 37702, history: 963985 };
+export const dataTypeIds = { bookmarks: 32904, settings: 37702, history: 963985, passwords: 45873 };
 export const rootGuids: Record<string, string> = {
   'bookmarks-bar': '0bc5d13f-2cba-5d74-951f-3f233fe6c908',
   'other-bookmarks': '82b081ec-3dd3-529c-8475-ab6c344590dd',
@@ -21,8 +22,11 @@ export function windowsMicros(milliseconds: number): string { return (BigInt(Mat
 export function unixMillis(micros: unknown): number {
   try { return Number((BigInt(String(micros)) - windowsEpoch) / 1000n); } catch { throw new BrowserError('INVALID_ARGUMENT', '同步时间戳无效'); }
 }
-export function localHash(item: SyncLocalItem | null): string {
+export function localHash(item: SyncLocalItem | null, secrets?: SecretStorePort): string {
   if (!item) return 'deleted';
+  if (item.type === 'passwords') {
+    return createHash('sha256').update(JSON.stringify({ origin: item.value.origin, username: item.value.username, createdAt: item.value.createdAt, updatedAt: item.value.updatedAt })).digest('hex');
+  }
   const value = item.type === 'history' ? { ...item.value, visitCount: 1 } : item.value;
   return createHash('sha256').update(JSON.stringify({ type: item.type, id: item.id, value })).digest('hex');
 }
@@ -30,6 +34,7 @@ export function clientTagHash(specificsField: string, tag: string): string {
   return createHash('sha1').update(encodeProto('EntitySpecifics', { [specificsField]: {} })).update(tag).digest('base64');
 }
 export function specificsForItem(item: SyncLocalItem, deviceId: string): { specifics: Specifics; tag: string; field: string } {
+  if (item.type === 'passwords') throw new BrowserError('FORBIDDEN', '密码必须走专用加密映射');
   if (item.type === 'bookmarks') {
     const node = item.value;
     const position = Buffer.alloc(8);
@@ -102,5 +107,6 @@ export function entityType(entity: SyncEntity): SyncLocalType | undefined {
   if (entity.specifics?.bookmark) return 'bookmarks';
   if (entity.specifics?.history) return 'history';
   if (entity.specifics?.preference) return 'settings';
+  if (entity.specifics?.password) return 'passwords';
   return undefined;
 }

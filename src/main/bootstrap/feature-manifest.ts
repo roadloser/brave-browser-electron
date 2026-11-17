@@ -13,6 +13,8 @@ import { leoFeature } from '../../features/leo/main';
 import { shieldsFeature } from '../../features/shields/main';
 import { contentServicesFeature } from '../../features/content-services/main';
 import { syncFeature } from '../../features/sync/main';
+import { fingerprintPrivacyFeature } from '../../features/fingerprint-privacy/main';
+import { rewardsFeature } from '../../features/rewards/main';
 
 export const featureManifest: readonly FeatureDefinition[] = [
   settingsFeature,
@@ -25,8 +27,10 @@ export const featureManifest: readonly FeatureDefinition[] = [
   newTabFeature,
   pageToolsFeature,
   shieldsFeature,
+  fingerprintPrivacyFeature,
   extensionsFeature,
   leoFeature,
   contentServicesFeature,
   syncFeature,
+  rewardsFeature,
 ];

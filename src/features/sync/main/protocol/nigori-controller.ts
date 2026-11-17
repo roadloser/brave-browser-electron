@@ -39,6 +39,17 @@ export class NigoriController {
     if (!this.defaultKey) throw new BrowserError('UNAVAILABLE', '同步密钥尚未建立');
     return { [field]: {}, encrypted: encryptNigori(this.defaultKey, encodeProto('EntitySpecifics', specifics)) };
   }
+  encryptPassword(raw: Buffer): Specifics {
+    if (!this.defaultKey) throw new BrowserError('UNAVAILABLE', '同步密钥尚未建立');
+    return { password: { encrypted: encryptNigori(this.defaultKey, raw) } };
+  }
+  decryptPassword(specifics: Specifics): Buffer | null {
+    const encrypted = specifics.password?.encrypted;
+    if (!encrypted) return null;
+    const key = this.keys.get(encrypted.key_name);
+    if (!key) throw new BrowserError('CONFLICT', '远端密码使用未知同步密钥');
+    return decryptNigori(key, encrypted);
+  }
   decrypt(specifics: Specifics): Specifics {
     if (!specifics.encrypted) return specifics;
     const key = this.keys.get(specifics.encrypted.key_name);

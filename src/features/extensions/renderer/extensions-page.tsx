@@ -13,6 +13,7 @@ export function ExtensionsPage() {
   const [storeId, setStoreId] = useState('');
   const [removing, setRemoving] = useState<ExtensionRecord | null>(null);
   const [status, setStatus] = useState('');
+  const [clearData, setClearData] = useState(false);
 
   async function propose(operation: () => Promise<ExtensionInstallProposal | null>) {
     const next = await extensions.run(operation);
@@ -31,6 +32,9 @@ export function ExtensionsPage() {
     <form className="extension-store" onSubmit={event => { event.preventDefault(); void propose(() => browserClient.command('extensions.proposeStoreInstall', { extensionId: storeId.trim() })); }}>
       <label>Chrome 商店扩展 ID<input value={storeId} onChange={event => setStoreId(event.target.value)} placeholder="32 位扩展 ID" pattern="[a-p]{32}" required /></label>
       <button disabled={extensions.pending}>{extensions.pending ? '正在准备…' : '获取扩展并查看权限'}</button>
+      {extensions.pending && <button type="button" onClick={() => void browserClient.command('extensions.cancelPending', {}).then(() => {
+        setProposal(null); setStatus('已取消准备；若传输已开始，完成后会自动清理临时文件。');
+      }).catch(problem => setStatus(problem instanceof Error ? problem.message : '取消失败'))}>取消准备</button>}
       <button type="button" onClick={() => void extensions.run(() => browserClient.command('browser.openTab', { url: 'https://chromewebstore.google.com/', active: true }))}>打开 Chrome 商店</button>
     </form>
     {extensions.error && <div className="extension-error" role="alert">{extensions.error}<button onClick={() => void extensions.refresh()}>重新加载</button></div>}
@@ -46,15 +50,17 @@ export function ExtensionsPage() {
         <details><summary>权限与站点访问</summary><ul>{[...extension.permissions, ...extension.hostPermissions].map(permission => <li key={permission}>{permission}</li>)}</ul></details>
         <footer><button disabled={extensions.pending || !extension.enabled} onClick={() => void extensions.run(async () => extensions.accept(await browserClient.command('extensions.reload', { id: extension.id })))}>重新加载</button>
           <button disabled={extensions.pending} onClick={() => void propose(() => browserClient.command('extensions.proposeUpdate', { id: extension.id }))}>检查更新</button>
-          <button disabled={extensions.pending} onClick={() => setRemoving(extension)}>移除</button></footer>
+          <button disabled={extensions.pending} onClick={() => { setClearData(false); setRemoving(extension); }}>移除</button></footer>
       </article>)}</div>}
     {proposal && <InstallConfirmation proposal={proposal} pending={extensions.pending} error={extensions.error} onConfirm={approve => void confirm(approve)} />}
     {removing && <Modal open title={`移除“${removing.name}”？`} className="extension-dialog" onOpenChange={open => { if (!open && !extensions.pending) setRemoving(null); }}>
       <p>将停止扩展并删除其安装文件。当前版本保留扩展存储数据，便于重新安装恢复。</p>
+      <label><input type="checkbox" checked={clearData} onChange={event => setClearData(event.target.checked)} />同时清除扩展数据</label>
+      {clearData && <p className="extension-warning">当前运行时尚不能保证完整清除chrome.storage。该选择会阻止移除并说明原因，不会伪报清理成功。</p>}
       {extensions.error && <p role="alert">{extensions.error}</p>}
       <footer><button disabled={extensions.pending} onClick={() => setRemoving(null)}>取消</button>
         <button disabled={extensions.pending} onClick={async () => {
-          const result = await extensions.run(() => browserClient.command('extensions.remove', { id: removing.id }));
+          const result = await extensions.run(() => browserClient.command('extensions.remove', { id: removing.id, clearData }));
           if (result) { extensions.accept(result); setRemoving(null); }
         }}>移除</button></footer>
     </Modal>}

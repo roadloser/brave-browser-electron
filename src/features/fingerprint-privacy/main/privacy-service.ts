@@ -27,6 +27,7 @@ export class PrivacyService {
       if (event.type === 'tabClosed') this.tabs.delete(event.tabId);
       if (event.type === 'contextDisposed' && event.context.isPrivate) {
         this.privateModes.delete(event.context.contextId); this.tokens.release(event.context.contextId);
+        for (const [tabId, tab] of this.tabs) if (tab.contextId === event.context.contextId) this.tabs.delete(tabId);
         for (const [session, preload] of this.sessions) if (preload.contextId === event.context.contextId) {
           session.unregisterPreloadScript(preload.id); this.sessions.delete(session);
         }
@@ -94,7 +95,7 @@ export class PrivacyService {
     const repository = this.repository(context.profileId);
     const privateSettings = context.isPrivate ? this.privateModes.get(context.contextId) : undefined;
     const defaultMode = privateSettings?.defaultMode ?? repository.state().mode;
-    const siteMode = site ? privateSettings?.sites.get(site) ?? repository.siteMode(site) : undefined;
+    const siteMode = site ? context.isPrivate ? privateSettings?.sites.get(site) : repository.siteMode(site) : undefined;
     return {
       mode: siteMode ?? defaultMode, defaultMode, site, inherited: siteMode === undefined,
       runtimeVersion: 'electron43-brave-audio-v1', capabilities: privacyCapabilities(),
@@ -105,7 +106,9 @@ export class PrivacyService {
   private effectiveMode(context: BrowserContext, site: string): PrivacyMode {
     const repository = this.repository(context.profileId);
     const settings = context.isPrivate ? this.privateModes.get(context.contextId) : undefined;
-    return settings?.sites.get(site) ?? repository.siteMode(site) ?? settings?.defaultMode ?? repository.state().mode;
+    return context.isPrivate
+      ? settings?.sites.get(site) ?? settings?.defaultMode ?? repository.state().mode
+      : repository.siteMode(site) ?? repository.state().mode;
   }
   private repository(profileId: string) { return new PrivacyRepository(this.runtime.storage.open(profileId)); }
   private privateState(contextId: string) {
@@ -120,7 +123,8 @@ export class PrivacyService {
     this.sessions.set(session, { id, contextId: context.contextId });
   }
   private acceptState(state: BrowserSnapshot): void {
-    this.tabs.clear();
+    const windowIds = new Set(state.windows.map(window => window.id));
+    for (const [tabId, tab] of this.tabs) if (windowIds.has(tab.windowId)) this.tabs.delete(tabId);
     for (const window of state.windows) for (const tab of window.tabs) this.tabs.set(tab.id, tab);
   }
   private changed(context: CommandContext, site?: string): void {

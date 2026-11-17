@@ -1,0 +1,27 @@
+.rewards-panel { height: 100%; overflow: auto; padding: 30px 40px; box-sizing: border-box; background: var(--color-surface); color: var(--color-text); }
+.rewards-panel h1 { margin: 0 0 8px; font-size: 25px; }
+.rewards-panel h2 { font-size: 16px; }
+.rewards-panel p { line-height: 1.7; }
+.rewards-panel > header p { color: var(--color-muted); }
+.rewards-summary { background: linear-gradient(125deg,#5141a5,#a537b9); color: white; border-radius: 16px; padding: 26px; margin: 26px 0; display: flex; align-items: baseline; gap: 12px; }
+.rewards-summary strong { font-size: 42px; }
+.rewards-summary small { margin-left: auto; }
+.rewards-status-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(190px,1fr)); gap: 16px; }
+.rewards-status-grid article { border: 1px solid var(--color-border); border-radius: 12px; padding: 16px; overflow-wrap: anywhere; }
+.rewards-status-grid small { color: var(--color-muted); line-height: 1.7; }
+.rewards-panel input { padding: 9px 12px; border: 1px solid var(--color-border); border-radius: 8px; color: inherit; background: var(--color-surface); font: inherit; }
+.rewards-panel button, .rewards-confirm button { padding: 9px 13px; border: 1px solid var(--color-border); border-radius: 8px; font: inherit; background: var(--color-surface); color: var(--color-text); cursor: pointer; }
+.rewards-panel button:disabled { opacity: .5; cursor: default; }
+.rewards-actions { display: flex; gap: 14px; align-items: end; margin: 24px 0; }
+.rewards-panel label { display: grid; gap: 8px; font-size: 14px; }
+.rewards-actions input { width: 150px; }
+.rewards-configuration, .rewards-capabilities { border-top: 1px solid var(--color-border); margin-top: 20px; padding-top: 18px; }
+.rewards-panel summary { cursor: pointer; }
+.rewards-configuration form { display: grid; gap: 16px; max-width: 650px; }
+.rewards-configuration button { justify-self: start; }
+.rewards-capabilities ul { padding: 0; list-style: none; }
+.rewards-capabilities li { margin: 20px 0; }
+.rewards-capabilities span { margin-left: 12px; font-size: 13px; color: var(--color-muted); }
+.rewards-capabilities p { margin: 5px 0; color: var(--color-muted); font-size: 13px; }
+.rewards-error { background: var(--color-danger-soft); color: var(--color-danger); border-radius: 8px; padding: 12px; }
+.rewards-confirm footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }

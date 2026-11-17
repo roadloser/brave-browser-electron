@@ -15,6 +15,8 @@ export type SyncState = {
   capabilities: { dataType: SyncDataType; status: 'implemented' | 'blocked' | 'unknown'; reason?: string }[];
   pending: number; conflicts: SyncConflict[]; lastSync: number | null;
   error?: string; revision: number;
+  remoteDevices: { id: string; name: string; lastSeen: number }[];
+  remoteTabs: { deviceId: string; tabId: string; title: string; url: string; lastModified: number }[];
 };
 export type SyncCode = { code: string; expiresAt: number };
 export const syncCommandSchemas = {
@@ -31,6 +33,7 @@ export const syncCommandSchemas = {
   'sync.cancel': z.object({}),
   'sync.leave': z.object({ confirmed: z.literal(true) }),
   'sync.resolveConflict': z.object({ id: idSchema, keep: z.enum(['local', 'remote']) }),
+  'sync.openRemoteTab': z.object({ deviceId: idSchema, tabId: idSchema }),
 };
 export interface SyncCommandResults {
   'sync.get': SyncState;
@@ -43,4 +46,5 @@ export interface SyncCommandResults {
   'sync.cancel': SyncState;
   'sync.leave': SyncState;
   'sync.resolveConflict': SyncState;
+  'sync.openRemoteTab': void;
 }

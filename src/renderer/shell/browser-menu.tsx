@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Menu } from '@base-ui/react/menu';
-import { Bookmark, Download, History, Menu as MenuIcon, Monitor, PanelLeft, Plus, Settings, Undo2, VenetianMask } from 'lucide-react';
+import { Bookmark, Download, FolderOpen, History, Menu as MenuIcon, Monitor, PanelLeft, Plus, Settings, Undo2, VenetianMask } from 'lucide-react';
 import { IconButton } from '../components/icon-button';
 import { useBrowserCommand } from './use-browser-command';
 import { useBrowserStore } from './browser-store';
@@ -27,6 +27,7 @@ export function BrowserMenu() {
           <Menu.Item onClick={() => void command('browser.openWindow', {})}><Monitor size={16} />新建窗口<kbd>⌘N</kbd></Menu.Item>
           <Menu.Item onClick={() => void command('browser.openWindow', { isPrivate: true })}><VenetianMask size={16} />新建私密窗口<kbd>⇧⌘N</kbd></Menu.Item>
           <Menu.Item onClick={() => void command('browser.reopenClosedTab', {})}><Undo2 size={16} />重新打开关闭的标签页</Menu.Item>
+          <Menu.Item onClick={() => void command('browser.openFile', {})}><FolderOpen size={16} />打开文件<kbd>⌘O</kbd></Menu.Item>
           <Menu.Separator className="menu-separator" />
           {pages.map(({ url, label, icon: Icon }) => (
             <Menu.Item key={url} onClick={() => void command('browser.openTab', { url })}><Icon size={16} />{label}</Menu.Item>

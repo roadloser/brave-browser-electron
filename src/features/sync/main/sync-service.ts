@@ -10,6 +10,7 @@ import { SyncEngine } from './sync-engine';
 import { ChangeJournal } from './change-journal';
 import { ConflictResolver } from './conflict-resolver';
 import type { SyncProtocolPort } from './protocol/types';
+import { SessionController } from './protocol/session-controller';
 
 export class SyncService {
   private readonly repository: SyncRepository;
@@ -17,6 +18,7 @@ export class SyncService {
   private readonly active = new Map<string, { controller: AbortController; promise: Promise<SyncState> }>();
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly unsubscribe: () => void;
+  private readonly unsubscribeTabs: () => void;
   private disposed = false;
 
   constructor(private readonly runtime: FeatureRuntime, protocol: SyncProtocolPort) {
@@ -30,10 +32,14 @@ export class SyncService {
     this.unsubscribe = runtime.syncData.subscribe((profileId, type) => {
       const config = this.repository.configuration(profileId);
       if (!config?.encryptedWords || !config.enabledTypes.includes(type)) return;
-      new ChangeJournal(runtime, this.repository).capture(profileId, config.enabledTypes.filter((candidate): candidate is SyncLocalType => ['bookmarks', 'history', 'settings'].includes(candidate)));
+      new ChangeJournal(runtime, this.repository).capture(profileId, config.enabledTypes.filter((candidate): candidate is SyncLocalType => ['bookmarks', 'history', 'settings', 'passwords'].includes(candidate)));
       this.publish(profileId);
       if (config.status === 'paused' || config.status === 'needs-authorization') return;
       this.schedule(profileId, 3000);
+    });
+    this.unsubscribeTabs = runtime.syncTabs.subscribe(profileId => {
+      const config = this.repository.configuration(profileId);
+      if (config?.encryptedWords && config.enabledTypes.includes('tabs') && config.status === 'ready') this.schedule(profileId, 3000);
     });
   }
 
@@ -47,12 +53,13 @@ export class SyncService {
         { dataType: 'bookmarks', status: 'implemented', reason: '真实GUID、永久根、目录和排序映射；未观察官方互通' },
         { dataType: 'history', status: 'implemented', reason: '访问与删除指令协议映射；未观察跨设备结果' },
         { dataType: 'settings', status: 'implemented', reason: '书签栏、纵向标签、启动、请勿跟踪；其余设置尚无等效映射' },
-        { dataType: 'passwords', status: 'blocked', reason: 'PasswordSpecifics与跨设备凭据语义映射尚未建立' },
-        { dataType: 'tabs', status: 'blocked', reason: 'SessionSpecifics设备/窗口/导航映射尚未建立' },
+        { dataType: 'passwords', status: 'implemented', reason: 'HTML登录密码协议映射；不支持的认证类型保留错误，不覆盖远端字段' },
+        { dataType: 'tabs', status: 'implemented', reason: 'SessionSpecifics设备/窗口/导航映射；远端标签由用户打开' },
       ],
       pending: this.repository.journal(profileId).length,
       conflicts: this.repository.conflicts(profileId).map(({ local: _local, remote: _remote, entity: _entity, ...conflict }) => conflict),
       lastSync: config.lastSync, error: config.error, revision: config.revision,
+      ...new SessionController(this.runtime, this.repository).state(profileId),
     };
   }
 
@@ -61,6 +68,7 @@ export class SyncService {
     const endpoint = new URL(input.endpoint);
     if (endpoint.protocol !== 'https:' || endpoint.username || endpoint.password || endpoint.search || endpoint.hash) throw new BrowserError('INVALID_ARGUMENT', '同步服务需要完整的 HTTPS 基地址，例如 https://sync-v2.brave.com/v2');
     const previous = this.configuration(context.profileId);
+    if (previous.encryptedWords && previous.endpoint.replace(/\/$/, '') !== endpoint.href.replace(/\/$/, '')) throw new BrowserError('CONFLICT', '更换同步服务器前请先离开当前同步链');
     const config = {
       ...previous, endpoint: endpoint.href.replace(/\/$/, ''), deviceName: input.deviceName,
       encryptedServiceKey: input.serviceKey === undefined ? previous.endpoint === input.endpoint ? previous.encryptedServiceKey : undefined : input.serviceKey ? this.runtime.secrets.encrypt(input.serviceKey) : undefined,
@@ -93,7 +101,6 @@ export class SyncService {
   }
   setTypes(context: CommandContext, types: SyncDataType[]) {
     this.assertWritable(context); this.assertIdle(context.profileId);
-    if (types.some(type => ['passwords', 'tabs'].includes(type))) throw new BrowserError('UNAVAILABLE', '所选数据类型尚未具备完整协议映射');
     this.save(context.profileId, { ...this.configuration(context.profileId), enabledTypes: [...new Set(types)] });
     return this.get(context.profileId);
   }
@@ -119,9 +126,13 @@ export class SyncService {
     this.save(context.profileId, { ...this.configuration(context.profileId), error: undefined });
     return this.get(context.profileId);
   }
+  openRemoteTab(context: CommandContext, deviceId: string, tabId: string): Promise<void> {
+    return new SessionController(this.runtime, this.repository).open(context.profileId, context.windowId, deviceId, tabId);
+  }
   async dispose(): Promise<void> {
     this.disposed = true;
     this.unsubscribe();
+    this.unsubscribeTabs();
     for (const timer of this.timers.values()) clearTimeout(timer);
     for (const current of this.active.values()) current.controller.abort();
     await Promise.allSettled([...this.active.values()].map(current => current.promise));
@@ -143,7 +154,7 @@ export class SyncService {
     try {
       await this.engine.run(profileId, configuration, controller.signal);
       controller.signal.throwIfAborted();
-      this.save(profileId, { ...this.configuration(profileId), status: 'ready', officialStatus: 'accepted', lastSync: Date.now(), error: undefined });
+      this.save(profileId, { ...this.configuration(profileId), status: 'ready', officialStatus: new URL(configuration.endpoint).hostname === 'sync-v2.brave.com' ? 'accepted' : 'unverified', lastSync: Date.now(), error: undefined });
     } catch (error) {
       const cancelled = controller.signal.aborted;
       const denied = error instanceof BrowserError && error.code === 'FORBIDDEN';

@@ -9,14 +9,15 @@ import { NigoriController } from './protocol/nigori-controller';
 import { assertCommitted } from './protocol/response';
 import { clientTagHash, dataTypeIds } from './protocol/data-mapping';
 import type { ProgressMarker, SyncEntity, SyncProtocolPort, SyncRequestContext } from './protocol/types';
+import { SessionController } from './protocol/session-controller';
 
 export class SyncEngine {
   constructor(private readonly runtime: FeatureRuntime, private readonly repository: SyncRepository, private readonly protocol: SyncProtocolPort) {}
 
   async run(profileId: string, configuration: SyncConfiguration, signal: AbortSignal): Promise<void> {
     if (!configuration.encryptedWords) throw new BrowserError('UNAVAILABLE', '尚未加入同步链');
-    const types = configuration.enabledTypes.filter((type): type is SyncLocalType => ['bookmarks', 'history', 'settings'].includes(type));
-    const ids = [...types.map(type => dataTypeIds[type]), 47745, 154522, ...(types.includes('history') ? [150251] : [])];
+    const types = configuration.enabledTypes.filter((type): type is SyncLocalType => ['bookmarks', 'history', 'settings', 'passwords'].includes(type));
+    const ids = [...types.map(type => dataTypeIds[type]), 47745, 154522, ...(types.includes('history') ? [150251] : []), ...(configuration.enabledTypes.includes('tabs') ? [50119] : [])];
     const context: SyncRequestContext = {
       words: this.runtime.secrets.decrypt(configuration.encryptedWords),
       endpoint: configuration.endpoint, serviceKey: configuration.encryptedServiceKey ? this.runtime.secrets.decrypt(configuration.encryptedServiceKey) : undefined,
@@ -55,10 +56,12 @@ export class SyncEngine {
       }
       signal.throwIfAborted();
       this.repository.setMetadata(profileId, 'nigori', nigoriEntity);
-      new RemoteApplier(this.runtime, this.repository).apply(profileId, entities, nigori, markers, context.birthday ?? '', context.chips);
+      const sessions = new SessionController(this.runtime, this.repository);
+      new RemoteApplier(this.runtime, this.repository).apply(profileId, entities, nigori, markers, context.birthday ?? '', context.chips, () => sessions.import(profileId, entities, nigori));
       journal.capture(profileId, types);
       await this.registerDevice(profileId, configuration, context, nigori, ids);
-      await new CommitUploader(this.repository, this.protocol).upload(profileId, context, nigori, ids);
+      await new CommitUploader(this.repository, this.protocol, this.runtime.secrets).upload(profileId, context, nigori, ids);
+      if (configuration.enabledTypes.includes('tabs')) await sessions.upload(profileId, configuration, context, nigori, this.protocol, ids);
     } finally { nigori.dispose(); }
   }
 
@@ -66,7 +69,7 @@ export class SyncEngine {
     const previous = this.repository.metadata<SyncEntity>(profileId, 'device');
     const entity: SyncEntity = {
       id_string: previous?.id_string ?? configuration.deviceId, version: previous?.version ?? '0',
-      client_tag_hash: clientTagHash('device_info', configuration.deviceId), name: 'encrypted',
+      client_tag_hash: clientTagHash('device_info', 'DeviceInfo_' + configuration.deviceId), name: 'encrypted',
       specifics: nigori.encrypt({ device_info: {
         cache_guid: configuration.deviceId, client_name: configuration.deviceName,
         signin_scoped_device_id: configuration.deviceId, sync_user_agent: 'Brave Electron',

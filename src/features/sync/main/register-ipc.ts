@@ -12,6 +12,7 @@ export function registerSyncIpc(runtime: FeatureRuntime, service: SyncService) {
     runtime.router.handle('sync.cancel', (_payload, context) => service.cancel(context)),
     runtime.router.handle('sync.leave', (_payload, context) => service.leave(context)),
     runtime.router.handle('sync.resolveConflict', (payload, context) => service.resolve(context, payload.id, payload.keep)),
+    runtime.router.handle('sync.openRemoteTab', (payload, context) => service.openRemoteTab(context, payload.deviceId, payload.tabId)),
   ];
   return () => disposers.forEach(dispose => dispose());
 }

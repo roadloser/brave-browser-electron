@@ -1,17 +1,19 @@
 import { randomUUID } from 'node:crypto';
 import { BrowserError } from '../../../shared/errors';
 import { SyncRepository, type JournalEntry } from './repository';
-import { clientTagHash, specificsForItem } from './protocol/data-mapping';
+import { clientTagHash, specificsForItem, dataTypeIds } from './protocol/data-mapping';
 import { deletionSpecifics } from './protocol/history-deletions';
 import { commitResults } from './protocol/response';
 import type { NigoriController } from './protocol/nigori-controller';
 import type { SyncEntity, SyncProtocolPort, SyncRequestContext } from './protocol/types';
+import type { SecretStorePort } from '../../../shared/runtime-ports';
+import { passwordToData } from './protocol/password-mapping';
 
 export class CommitUploader {
-  constructor(private readonly repository: SyncRepository, private readonly protocol: SyncProtocolPort) {}
+  constructor(private readonly repository: SyncRepository, private readonly protocol: SyncProtocolPort, private readonly secrets: SecretStorePort) {}
   async upload(profileId: string, context: SyncRequestContext, nigori: NigoriController, types: number[]): Promise<void> {
     const conflicts = new Set(this.repository.conflicts(profileId).map(conflict => conflict.dataType + ':' + conflict.itemId));
-    const pending = this.repository.journal(profileId).filter(entry => !conflicts.has(entry.type + ':' + entry.id));
+    const pending = this.repository.journal(profileId).filter(entry => types.includes(dataTypeIds[entry.type]) && !conflicts.has(entry.type + ':' + entry.id));
     pending.sort((first, second) => {
       if (first.item?.type === 'bookmarks' && second.item?.type === 'bookmarks') return depth(first, pending) - depth(second, pending);
       return first.queuedAt - second.queuedAt;
@@ -49,6 +51,16 @@ export class CommitUploader {
         return { id_string: id, version: '0', name: 'encrypted', client_tag_hash: clientTagHash('history_delete_directive', id), specifics: nigori.encrypt(deletionSpecifics(previous.item), 'history_delete_directive') };
       }
       return { id_string: previous.serverId, version: previous.version, deleted: true, specifics: previous.wire.specifics, client_tag_hash: previous.wire.client_tag_hash };
+    }
+    if (entry.item.type === 'passwords') {
+      const mapped = passwordToData(entry.item, this.secrets);
+      try {
+        return {
+          id_string: previous?.serverId ?? entry.id, version: previous?.version ?? '0', name: 'encrypted',
+          mtime: String(entry.item.value.updatedAt), ctime: String(entry.item.value.createdAt),
+          client_tag_hash: clientTagHash('password', mapped.tag), specifics: nigori.encryptPassword(mapped.raw),
+        };
+      } finally { mapped.raw.fill(0); }
     }
     const mapped = specificsForItem(entry.item, deviceId);
     const roots = this.repository.metadata<Record<string, string>>(profileId, 'roots') ?? {};

@@ -7,10 +7,11 @@ import { positionBytes } from './protocol/position';
 import { applyHistoryDirective } from './protocol/history-deletions';
 import type { NigoriController } from './protocol/nigori-controller';
 import type { ProgressMarker, SyncEntity, SyncedEntity } from './protocol/types';
+import { passwordFromData, passwordToData } from './protocol/password-mapping';
 
 export class RemoteApplier {
   constructor(private readonly runtime: FeatureRuntime, private readonly repository: SyncRepository) {}
-  apply(profileId: string, remote: SyncEntity[], nigori: NigoriController, markers: ProgressMarker[], birthday: string, chips?: string): void {
+  apply(profileId: string, remote: SyncEntity[], nigori: NigoriController, markers: ProgressMarker[], birthday: string, chips?: string, applyRelated?: () => void): void {
     const known = this.repository.entities(profileId);
     const pending = this.repository.journal(profileId);
     const roots = this.repository.metadata<Record<string, string>>(profileId, 'roots') ?? {};
@@ -31,9 +32,17 @@ export class RemoteApplier {
         directiveChanges.push(...applyHistoryDirective(specifics, this.runtime.syncData.snapshot(profileId, 'history')));
         continue;
       }
-      let item = entity.deleted ? null : itemFromEntity(entity, specifics, roots);
+      const passwordBytes = entity.deleted ? null : nigori.decryptPassword(specifics);
+      let item: SyncLocalItem | null;
+      try { item = entity.deleted ? null : passwordBytes ? passwordFromData(passwordBytes, entity, this.runtime.secrets) : itemFromEntity(entity, specifics, roots); }
+      finally { passwordBytes?.fill(0); }
       const matchedPending = !previous && entity.client_tag_hash ? pending.find(candidate => {
         if (!candidate.item) return false;
+        if (candidate.item.type === 'passwords') {
+          const mapped = passwordToData(candidate.item, this.runtime.secrets);
+          try { return clientTagHash('password', mapped.tag) === entity.client_tag_hash; }
+          finally { mapped.raw.fill(0); }
+        }
         const mapped = specificsForItem(candidate.item, deviceId);
         return clientTagHash(mapped.field, mapped.tag) === entity.client_tag_hash;
       }) : undefined;
@@ -51,10 +60,11 @@ export class RemoteApplier {
     const changes: SyncLocalChange[] = [...directiveChanges];
     const touched = new Set<SyncLocalType>();
     this.repository.database(profileId).transaction(() => {
+      applyRelated?.();
       for (const value of mapped) {
         const type = value.item?.type ?? value.previous!.type;
         const localId = value.item?.id ?? value.previous!.localId;
-        const hash = localHash(value.item);
+        const hash = localHash(value.item, this.runtime.secrets);
         const tracked: SyncedEntity = { type, localId, serverId: value.entity.id_string!, version: value.entity.version ?? '0', item: value.item, hash, wire: value.entity };
         const unsent = pending.find(entry => entry.type === type && entry.id === localId);
         if (unsent && unsent.hash !== hash && value.previous?.hash === hash) {
@@ -93,5 +103,6 @@ export class RemoteApplier {
 function summary(item: SyncLocalItem | null): string {
   if (!item) return '已删除';
   if (item.type === 'settings') return item.value.name + ': ' + String(item.value.value);
+  if (item.type === 'passwords') return item.value.origin + ' · ' + item.value.username;
   return item.value.title || item.value.url || item.id;
 }

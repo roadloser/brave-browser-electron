@@ -31,7 +31,7 @@ export class TabManager {
       pinned: saved?.pinned ?? options.pinned ?? false, muted: saved?.muted ?? false,
       audible: false, crashed: false, navigationId: randomUUID(), revision: 0,
     };
-    const tab: TabRecord = { snapshot, view, disposeEvents: () => undefined, source: 'navigation' };
+    const tab: TabRecord = { snapshot, view, disposeEvents: () => undefined, source: 'navigation', allowedFiles: new Set() };
     this.records.set(snapshot.id, tab);
     window.tabIds.push(snapshot.id);
     if (snapshot.pinned) this.move(window, snapshot.id, window.tabIds.filter(tabId => this.get(tabId).snapshot.pinned).length - 1);

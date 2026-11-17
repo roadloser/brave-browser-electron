@@ -7,6 +7,7 @@ for (const configFile of [
   'vite.translation.config.ts',
   'vite.shields.config.ts',
   'vite.privacy.config.ts',
+  'vite.wallet.config.ts',
   'vite.config.ts',
 ]) {
   await build({ configFile });

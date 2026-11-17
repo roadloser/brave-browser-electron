@@ -39,8 +39,18 @@ export class BraveSyncAdapter implements SyncProtocolPort {
     if (!response.ok) throw new BrowserError('UNAVAILABLE', '同步服务返回 HTTP ' + response.status);
     const length = Number(response.headers.get('content-length') || 0);
     if (length > 32 * 1024 * 1024) throw new BrowserError('UNAVAILABLE', '同步响应超出允许大小');
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    if (bytes.byteLength > 32 * 1024 * 1024) throw new BrowserError('UNAVAILABLE', '同步响应超出允许大小');
+    const reader = response.body?.getReader();
+    if (!reader) throw new BrowserError('UNAVAILABLE', '同步服务返回空响应');
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    for (;;) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      size += chunk.value.byteLength;
+      if (size > 32 * 1024 * 1024) { await reader.cancel(); throw new BrowserError('UNAVAILABLE', '同步响应超出允许大小'); }
+      chunks.push(chunk.value);
+    }
+    const bytes = Buffer.concat(chunks);
     const result = decodeProto<SyncResponse>('ClientToServerResponse', bytes);
     const code = result.error?.error_type ?? result.error_code;
     if (code !== 0) {

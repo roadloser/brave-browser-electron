@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { BrowserWindow } from 'electron';
 import type { CredentialCandidate, CredentialsState } from '../../../shared/contracts/credentials';
 import type { CommandContext, FeatureRuntime } from '../../../shared/module-lifecycle';
 import { BrowserError } from '../../../shared/errors';
@@ -16,6 +17,7 @@ export class VaultService {
   private revision = 0;
   private readonly disposeCore: () => void;
   private readonly submitCapture: SubmitCapture;
+  private readonly listeners = new Set<(profileId: string) => void>();
 
   constructor(private readonly runtime: FeatureRuntime) {
     this.repository = new CredentialRepository(runtime.storage);
@@ -36,7 +38,7 @@ export class VaultService {
     for (const [id, candidate] of this.candidates) if (candidate.expiresAt < Date.now()) this.candidates.delete(id);
     const available = this.runtime.secrets.available();
     return {
-      entries: this.repository.list(context.profileId).map(({ encryptedPassword: _secret, ...entry }) => entry),
+      entries: this.repository.list(context.profileId).map(({ encryptedPassword: _secret, encryptedSyncMetadata: _metadata, ...entry }) => entry),
       candidates: [...this.candidates.values()].filter(candidate => candidate.context.windowId === context.windowId).map(candidate => candidate.summary),
       available, reason: available ? undefined : '系统安全存储不可用，密码不会以明文保存', revision: this.revision,
     };
@@ -84,6 +86,14 @@ export class VaultService {
     this.assertSave(context); this.repository.remove(context.profileId, id); this.publish(context); return this.list(context);
   }
   dispose(): void { this.disposeCore(); this.submitCapture.dispose(); this.fillController.dispose(); this.candidates.clear(); }
+  subscribe(listener: (profileId: string) => void) { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; }
+  notifyImported(profileId: string): void {
+    this.revision += 1;
+    for (const native of BrowserWindow.getAllWindows()) {
+      const window = this.runtime.core.getWindowForSender(native.webContents.id);
+      if (window?.profileId === profileId) this.runtime.publish('credentials.changed', this.list({ ...window, windowId: window.id, requestId: 'sync-import' }), { windowId: window.id });
+    }
+  }
   private assertSave(context: CommandContext): void {
     if (context.isPrivate) throw new BrowserError('FORBIDDEN', '私密窗口不保存或删除密码');
     if (!this.settings.get(context.profileId).savePasswords) throw new BrowserError('FORBIDDEN', '此资料已关闭密码保存');
@@ -91,6 +101,7 @@ export class VaultService {
   }
   private publish(context: CommandContext): void {
     this.revision += 1;
+    for (const listener of this.listeners) listener(context.profileId);
     for (const window of this.runtime.core.getState(context.windowId).windows) {
       this.runtime.publish('credentials.changed', this.list({ ...context, windowId: window.id }), { windowId: window.id });
     }

@@ -2,6 +2,7 @@ import type { BrowserWindow, OnBeforeRequestListenerDetails, OnBeforeSendHeaders
 import type { BrowserContext, BrowserSnapshot, CoreEvent, BrowserLayout, ProfileSnapshot, Rectangle, TabSnapshot, WindowSnapshot } from './contracts/browser-core';
 import type { Dispose } from './contracts/envelope';
 import type { BrowserSettings } from './contracts/settings';
+import type { SyncTabsSnapshot } from './sync-data-ports';
 
 export type SqlValue = string | number | bigint | null | Uint8Array;
 export type SqlParameters = readonly SqlValue[] | Record<string, SqlValue>;
@@ -37,6 +38,7 @@ export interface RequestHostPort {
 }
 export interface BrowserCorePort {
   getProfiles(): ProfileSnapshot[];
+  getSyncTabs(profileId: string): SyncTabsSnapshot;
   configureProfile(profileId: string, settings: Pick<BrowserSettings, 'startup' | 'searchEngine' | 'verticalTabs'>): void;
   getState(windowId: string): BrowserSnapshot;
   getWindow(windowId: string): WindowSnapshot;
@@ -50,6 +52,7 @@ export interface BrowserCorePort {
   getContexts(): BrowserContext[];
   onEvent(listener: (event: CoreEvent) => void): Dispose;
   openWindow(options?: { profileId?: string; isPrivate?: boolean }): Promise<WindowSnapshot>;
+  openFile(windowId: string): Promise<TabSnapshot | null>;
   createProfile(name: string): ProfileSnapshot;
   renameProfile(profileId: string, name: string): ProfileSnapshot;
   deleteProfile(profileId: string, confirmName: string): Promise<void>;

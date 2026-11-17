@@ -16,6 +16,7 @@ export function registerBrowserIpc(runtime: FeatureRuntime): () => void {
     router.handle('browser.openWindow', (payload, context) => core.openWindow({ ...payload, profileId: payload.profileId ?? context.profileId })),
     router.handle('browser.closeWindow', (_payload, context) => core.closeWindow(context.windowId)),
     router.handle('browser.openTab', (payload, context) => core.openTab({ ...payload, windowId: context.windowId })),
+    router.handle('browser.openFile', (_payload, context) => core.openFile(context.windowId)),
     router.handle('browser.selectTab', (payload, context) => { assertTab(payload.tabId, context.windowId); core.selectTab(payload.tabId); }),
     router.handle('browser.closeTab', (payload, context) => { assertTab(payload.tabId, context.windowId); core.closeTab(payload.tabId); }),
     router.handle('browser.navigate', (payload, context) => { assertTab(payload.tabId, context.windowId); return core.navigate(payload.tabId, payload.url); }),

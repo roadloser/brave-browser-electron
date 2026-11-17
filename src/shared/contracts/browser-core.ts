@@ -56,6 +56,7 @@ export const browserCommandSchemas = {
   'browser.deleteProfile': z.object({ profileId: idSchema, confirmName: z.string().min(1).max(80) }),
   'browser.closeWindow': z.object({}),
   'browser.openTab': z.object({ url: urlInputSchema.optional(), active: z.boolean().optional(), pinned: z.boolean().optional() }),
+  'browser.openFile': z.object({}),
   'browser.selectTab': tabTarget,
   'browser.closeTab': tabTarget,
   'browser.navigate': tabTarget.extend({ url: urlInputSchema }),
@@ -79,6 +80,7 @@ export interface BrowserCommandResults {
   'browser.deleteProfile': void;
   'browser.closeWindow': void;
   'browser.openTab': TabSnapshot;
+  'browser.openFile': TabSnapshot | null;
   'browser.selectTab': void;
   'browser.closeTab': void;
   'browser.navigate': void;

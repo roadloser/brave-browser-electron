@@ -21,8 +21,9 @@ export const extensionsCommandSchemas = {
   'extensions.proposeStoreInstall': z.object({ extensionId: z.string().regex(/^[a-p]{32}$/) }),
   'extensions.proposeUpdate': z.object({ id: idSchema }),
   'extensions.confirmInstall': z.object({ proposalId: idSchema, approve: z.boolean() }),
+  'extensions.cancelPending': z.object({}),
   'extensions.setEnabled': z.object({ id: idSchema, enabled: z.boolean() }),
-  'extensions.remove': z.object({ id: idSchema }),
+  'extensions.remove': z.object({ id: idSchema, clearData: z.boolean().default(false) }),
   'extensions.reload': z.object({ id: idSchema }),
   'extensions.openAction': z.object({ id: idSchema, tabId: idSchema }),
   'extensions.closeAction': z.object({}),
@@ -33,6 +34,7 @@ export interface ExtensionsCommandResults {
   'extensions.proposeStoreInstall': ExtensionInstallProposal;
   'extensions.proposeUpdate': ExtensionInstallProposal;
   'extensions.confirmInstall': ExtensionsState;
+  'extensions.cancelPending': ExtensionsState;
   'extensions.setEnabled': ExtensionsState;
   'extensions.remove': ExtensionsState;
   'extensions.reload': ExtensionsState;

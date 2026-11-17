@@ -13,6 +13,7 @@ export function attachBrowserKeyboard(runtime: FeatureRuntime, windowId: string,
     if (modifier && key === 'l') action = () => runtime.publish('browser.shortcut', { action: 'focusAddress' }, { windowId });
     if (modifier && key === 't') action = input.shift ? () => runtime.core.reopenClosedTab(windowId) : () => runtime.core.openTab({ windowId });
     if (modifier && key === 'n') action = () => runtime.core.openWindow({ profileId: window.profileId, isPrivate: input.shift });
+    if (modifier && key === 'o') action = () => runtime.core.openFile(windowId);
     if (modifier && key === 'w' && tabId) action = () => runtime.core.closeTab(tabId);
     if (modifier && key === 'r' && tabId) action = () => runtime.core.reload(tabId, input.shift);
     if (input.alt && key === 'arrowleft' && tabId) action = () => runtime.core.goBack(tabId);

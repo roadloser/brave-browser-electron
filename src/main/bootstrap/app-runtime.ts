@@ -27,6 +27,16 @@ export class AppRuntime {
   private disposed = false;
 
   async start(): Promise<void> {
+    try {
+      await this.initialize();
+    } catch (error) {
+      try { await this.dispose(); }
+      catch (cleanupError) { throw new AggregateError([error, cleanupError], '启动失败且资源释放未完成'); }
+      throw error;
+    }
+  }
+
+  private async initialize(): Promise<void> {
     const uiUrl = resolveUiUrl();
     const storage = new SqliteStorageHost(app.getPath('userData'));
     this.storage = storage;
@@ -52,12 +62,21 @@ export class AppRuntime {
     const policies = new NetworkPolicyCoordinator();
     const runtime: FeatureRuntime = {
       core, storage, router, publish, pages, syncData: new SyncDataCoordinator(),
+      syncTabs: {
+        snapshot: profileId => core.getSyncTabs(profileId),
+        subscribe: listener => core.onEvent(event => {
+          if (event.type !== 'stateChanged') return;
+          const window = event.state.windows.find(entry => entry.id === event.windowId);
+          if (window && !window.isPrivate && window.ready) listener(window.profileId);
+        }),
+      },
       secrets: new SecretStore(), requests: new ElectronRequestHost(policies),
       assets: {
         credentialPreloadPath: join(app.getAppPath(), 'dist/preload/credentials.cjs'),
         translationPreloadPath: join(app.getAppPath(), 'dist/preload/translation.cjs'),
         shieldsPreloadPath: join(app.getAppPath(), 'dist/preload/shields.cjs'),
         privacyPreloadPath: join(app.getAppPath(), 'dist/preload/privacy.cjs'),
+        walletPreloadPath: join(app.getAppPath(), 'dist/preload/wallet.cjs'),
       },
     };
     for (const profile of core.getProfiles()) storage.migrate(profile.id, migrationManifest);
@@ -67,13 +86,8 @@ export class AppRuntime {
       if (event.type === 'stateChanged') publish('browser.state', event.state, { windowId: event.windowId });
       if (event.type === 'shortcut') publish('browser.shortcut', { action: event.action }, { windowId: event.windowId });
     }));
-    try {
-      for (const definition of featureManifest) this.features.push(await definition.register(runtime));
-      await core.restore();
-    } catch (error) {
-      await this.dispose();
-      throw error;
-    }
+    for (const definition of featureManifest) this.features.push(await definition.register(runtime));
+    await core.restore();
   }
 
   async activate(): Promise<void> {
@@ -95,12 +109,14 @@ export class AppRuntime {
       try { await feature.dispose(); } catch (error) { errors.push(error); }
     }
     this.features = [];
-    for (const dispose of this.subscriptions.reverse()) dispose();
+    for (const dispose of this.subscriptions.reverse()) {
+      try { dispose(); } catch (error) { errors.push(error); }
+    }
     this.subscriptions = [];
-    this.pages?.dispose();
+    try { this.pages?.dispose(); } catch (error) { errors.push(error); }
     try { await this.core?.dispose(); } catch (error) { errors.push(error); }
-    this.router?.dispose();
-    this.storage?.close();
+    try { this.router?.dispose(); } catch (error) { errors.push(error); }
+    try { this.storage?.close(); } catch (error) { errors.push(error); }
     if (errors.length > 0) throw new AggregateError(errors, '部分浏览器资源未能正常释放');
   }
 }

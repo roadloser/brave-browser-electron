@@ -70,6 +70,10 @@ export function SyncSettings() {
         <button disabled={busy} onClick={() => void run(() => browserClient.command('sync.resolveConflict', { id: conflict.id, keep: 'local' }).then(setState))}>保留本地</button>
         <button disabled={busy} onClick={() => void run(() => browserClient.command('sync.resolveConflict', { id: conflict.id, keep: 'remote' }).then(setState))}>使用远端</button>
       </article>)}</section>}
+      {!!state.remoteDevices.length && <section><h2>其他设备</h2>{state.remoteDevices.map(device => <article key={device.id}>
+        <h3>{device.name}</h3><p>最后活动：{new Date(device.lastSeen).toLocaleString()}</p>
+        {state.remoteTabs.filter(tab => tab.deviceId === device.id).map(tab => <button key={tab.tabId} onClick={() => void run(() => browserClient.command('sync.openRemoteTab', { deviceId: device.id, tabId: tab.tabId }))}>{tab.title}<small>{tab.url}</small></button>)}
+      </article>)}</section>}
     </>}
     <Modal open={!!shownCode} title="同步代码" onOpenChange={open => { if (!open) setShownCode(undefined); }}>
       <p>仅在自己的设备之间传递。此处将在一分钟后隐藏。</p><p className="sync-code">{shownCode?.code}</p>

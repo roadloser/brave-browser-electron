@@ -12,7 +12,7 @@ export class ChangeJournal {
         const current = this.runtime.syncData.snapshot(profileId, type).filter(item => item.type !== 'bookmarks' || !rootGuids[item.id]);
         const ids = new Set(current.map(item => item.id));
         for (const item of current) {
-          const hash = localHash(item);
+          const hash = localHash(item, this.runtime.secrets);
           const previous = known.find(entity => entity.type === type && entity.localId === item.id);
           if (previous?.hash === hash) this.repository.dequeue(profileId, type, item.id);
           else this.repository.enqueue(profileId, { type, id: item.id, item, hash, queuedAt: Date.now() });

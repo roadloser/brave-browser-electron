@@ -49,7 +49,7 @@ export class NavigationController {
     };
     const gone = () => { tab.snapshot.crashed = true; tab.snapshot.loading = false; update(); };
     const willNavigate = (event: Electron.Event, url: string) => {
-      if (!/^https?:/i.test(url) && url !== 'about:blank') event.preventDefault();
+      if (!/^https?:/i.test(url) && url !== 'about:blank' && !tab.allowedFiles.has(url)) event.preventDefault();
     };
     contents.on('did-navigate', navigated);
     contents.on('did-navigate-in-page', inPage);
@@ -85,5 +85,14 @@ export class NavigationController {
       this.changed(tab);
       throw error;
     }
+  }
+
+  async openLocalFile(tab: TabRecord, url: string): Promise<void> {
+    tab.allowedFiles.add(url);
+    tab.snapshot.url = url;
+    tab.snapshot.title = decodeURIComponent(new URL(url).pathname.split('/').at(-1) ?? '本地文件');
+    tab.snapshot.error = undefined;
+    this.changed(tab);
+    await tab.view.webContents.loadURL(url);
   }
 }

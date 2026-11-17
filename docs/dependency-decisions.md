@@ -11,3 +11,7 @@ SQLite 固定 better-sqlite3 13.0.2。该版本 npm 包包含 Node-API 10 预构
 过滤引擎固定 Ghostery 2.20.3，经用户确认优先降低心智和维护成本。与 Brave adblock-rs 的规则语义差异明确保留；不引入Rust构建或新native维护。现成引擎由集中TS adapter使用，不重写规则解析器。
 
 扩展采用 electron-chrome-extensions 4.10.0 与 electron-chrome-web-store 0.13.0；版本差异集中于library-adapter，安装/更新均经权限确认，扩展popup使用独立WebContents，不接入管理preload。
+
+钱包按链使用现成库：EVM ethers、Solana web3.js、Bitcoin scure、Filecoin Zondax、Cardano Emurgo、Polkadot官方JS库。Node/WASM路径集中在chain adapter；主进程依赖external、WASM/native包资源从asar解包。未执行这些产物，没有运行兼容证明；Zcash等尚未落定能力单独记录，不能以其他链可调用替代。
+
+最近锁解析有ws7可选utf-8-validate5与已有6版本peer提示，未通过重编译解决；依赖的JS回退及隔离解析须在交付前按固定包说明处理。没有因为提示自动升级整套依赖。

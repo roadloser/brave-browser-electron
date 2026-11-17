@@ -11,7 +11,7 @@ function cbcEncrypt(key: Buffer, iv: Buffer, value: Uint8Array): Buffer {
 }
 function keyName(encryptionKey: Buffer, macKey: Buffer): string {
   const prefix = Buffer.alloc(12);
-  prefix.writeUInt32BE(4, 0); prefix.writeUInt32BE(1, 4); prefix.writeUInt32BE(10, 8);
+  prefix.writeUInt32BE(4, 0); prefix.writeUInt32BE(1, 4); prefix.writeUInt32BE(Buffer.byteLength('nigori-key'), 8);
   const encrypted = cbcEncrypt(encryptionKey, Buffer.alloc(16), Buffer.concat([prefix, Buffer.from('nigori-key')]));
   return Buffer.concat([encrypted, createHmac('sha256', macKey).update(encrypted).digest()]).toString('base64');
 }

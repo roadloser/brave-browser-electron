@@ -21,6 +21,7 @@ export class ExtensionManager {
   private readonly queues = new Map<string, Promise<unknown>>();
   private readonly stopCore;
   private latestState?: BrowserSnapshot;
+  private readonly knownWindows = new Map<string, BrowserSnapshot['windows'][number]>();
   private disposed = false;
 
   constructor(private readonly runtime: FeatureRuntime) {
@@ -29,10 +30,18 @@ export class ExtensionManager {
     this.stopCore = runtime.core.onEvent(event => {
       if (event.type === 'sessionCreated' && !event.context.isPrivate) void this.ensure(event.context).catch(error => this.report(event.context.profileId, error));
       if (event.type === 'stateChanged') {
-        this.latestState = event.state;
+        for (const window of event.state.windows) this.knownWindows.set(window.id, window);
+        this.latestState = { ...event.state, windows: [...this.knownWindows.values()] };
         for (const adapter of this.adapters.values()) {
-          try { adapter.synchronize(event.state); } catch (error) { this.report(adapter.profileId, error); }
+          try { adapter.synchronize(this.latestState); } catch (error) { this.report(adapter.profileId, error); }
         }
+      }
+      if (event.type === 'tabClosed') {
+        const window = this.knownWindows.get(event.windowId);
+        if (window) this.knownWindows.set(window.id, { ...window, tabs: window.tabs.filter(tab => tab.id !== event.tabId) });
+      }
+      if (event.type === 'contextDisposed') {
+        for (const [windowId, window] of this.knownWindows) if (window.contextId === event.context.contextId) this.knownWindows.delete(windowId);
       }
     });
   }
@@ -119,8 +128,15 @@ export class ExtensionManager {
     });
   }
 
-  async remove(context: CommandContext, id: string) {
+  async cancelPending(context: CommandContext) {
+    this.regular(context);
+    await this.proposals.cancel(context);
+    return this.state(context.profileId);
+  }
+
+  async remove(context: CommandContext, id: string, clearData = false) {
     this.regular(context); await this.ensure(context);
+    if (clearData) throw new BrowserError('UNAVAILABLE', '当前运行时尚不能保证完整清除chrome.storage扩展数据；可选择保留数据后移除，不会伪报已擦除');
     return this.enqueue(context.profileId, async () => {
       const extension = this.required(context.profileId, id);
       this.popup.closeExtension(id);

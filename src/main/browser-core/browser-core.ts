@@ -1,7 +1,8 @@
 import type { BrowserContext, BrowserLayout, BrowserSnapshot, CoreEvent, TabSnapshot, WindowSnapshot } from '../../shared/contracts/browser-core';
 import type { BrowserCorePort, StorageHost } from '../../shared/runtime-ports';
 import type { BrowserSettings } from '../../shared/contracts/settings';
-import { session } from 'electron';
+import { dialog, session } from 'electron';
+import { pathToFileURL } from 'node:url';
 import { BrowserError } from '../../shared/errors';
 import { ProfileManager } from './profile-manager';
 import { PageEventSource } from './page-event-source';
@@ -149,6 +150,25 @@ export class BrowserCore implements BrowserCorePort {
   }
   async openTab(options: { windowId: string; url?: string; active?: boolean; pinned?: boolean }) {
     return this.tabs.create(this.windows.get(options.windowId), options);
+  }
+  async openFile(windowId: string): Promise<TabSnapshot | null> {
+    const result = await dialog.showOpenDialog(this.getNativeWindow(windowId), { title: '打开文件', properties: ['openFile'] });
+    if (result.canceled || !result.filePaths[0]) return null;
+    const tab = await this.openTab({ windowId, url: 'about:blank' });
+    await this.navigation.openLocalFile(this.tabs.get(tab.id), pathToFileURL(result.filePaths[0]).href);
+    return this.getTab(tab.id);
+  }
+  getSyncTabs(profileId: string) {
+    return { windows: [...this.windows.records.values()].filter(window => window.ready && !window.context.isPrivate && window.context.profileId === profileId).map(window => ({
+      id: window.id, activeTabId: window.activeTabId,
+      tabs: window.tabIds.map(tabId => {
+        const saved = this.tabs.save(tabId);
+        const allowed = saved.entries.map((entry, index) => ({ entry, index })).filter(value => /^https?:/i.test(value.entry.url));
+        return { id: tabId, url: saved.url, title: saved.title, pinned: saved.pinned,
+          navigation: allowed.map(value => ({ url: value.entry.url, title: value.entry.title })),
+          activeIndex: Math.max(0, allowed.findIndex(value => value.index === saved.activeIndex)) };
+      }).filter(tab => /^https?:/i.test(tab.url)),
+    })) };
   }
   selectTab(tabId: string): void { this.tabs.select(this.windowForTab(tabId), tabId); }
   closeTab(tabId: string): void {

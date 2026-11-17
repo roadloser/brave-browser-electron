@@ -6,6 +6,7 @@ export type TabRecord = {
   view: WebContentsView;
   disposeEvents: () => void;
   source: 'navigation' | 'reload' | 'history' | 'same-document';
+  allowedFiles: Set<string>;
 };
 export type WindowRecord = {
   id: string;

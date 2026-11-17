@@ -18,33 +18,41 @@ export type InstallProposal = ExtensionInstallProposal & {
 
 export class InstallProposals {
   private readonly proposals = new Map<string, InstallProposal>();
+  private readonly generations = new Map<string, number>();
+  private disposed = false;
   private readonly timer = setInterval(() => { void this.expire(); }, 60_000);
 
   constructor(private readonly runtime: FeatureRuntime, private readonly packageSource: ExtensionPackageSourcePort) { this.timer.unref(); }
 
   async chooseDirectory(context: CommandContext): Promise<ExtensionInstallProposal | null> {
+    const generation = this.generation(context);
     const result = await dialog.showOpenDialog(this.runtime.core.getNativeWindow(context.windowId), {
       title: '选择解压后的扩展目录', properties: ['openDirectory'],
     });
     if (result.canceled || !result.filePaths[0]) return null;
+    this.assertActive(context, generation);
     return this.directory(context, result.filePaths[0]);
   }
 
   async directory(context: CommandContext, sourcePath: string, replacement?: StoredExtension): Promise<ExtensionInstallProposal> {
+    const generation = this.generation(context);
     await fingerprintDirectory(sourcePath);
     const cleanupPath = await this.staging(context.profileId);
     const directory = join(cleanupPath, 'candidate');
     try {
       await cp(sourcePath, directory, { recursive: true, dereference: false, errorOnExist: true });
+      this.assertActive(context, generation);
       return await this.create(context, directory, cleanupPath, { source: 'directory', sourcePath, replacesId: replacement?.id });
     } catch (error) { await rm(cleanupPath, { recursive: true, force: true }); throw error; }
   }
 
   async store(context: CommandContext, extensionId: string, replacement?: StoredExtension): Promise<ExtensionInstallProposal> {
+    const generation = this.generation(context);
     if (!/^[a-p]{32}$/.test(extensionId)) throw new BrowserError('INVALID_ARGUMENT', 'Chrome 商店扩展 ID 无效');
     const cleanupPath = await this.staging(context.profileId);
     try {
       const directory = await this.packageSource.download(extensionId, cleanupPath);
+      this.assertActive(context, generation);
       return await this.create(context, directory, cleanupPath, { source: 'web-store', expectedId: extensionId, replacesId: replacement?.id });
     } catch (error) { await rm(cleanupPath, { recursive: true, force: true }); throw error; }
   }
@@ -65,6 +73,7 @@ export class InstallProposals {
   }
 
   async dispose(): Promise<void> {
+    this.disposed = true;
     clearInterval(this.timer);
     const active = [...this.proposals.values()];
     this.proposals.clear();
@@ -97,5 +106,21 @@ export class InstallProposals {
       this.proposals.delete(proposal.id);
       await rm(proposal.cleanupPath, { recursive: true, force: true }).catch(() => undefined);
     }
+  }
+
+  async cancel(context: CommandContext): Promise<void> {
+    const key = this.contextKey(context);
+    this.generations.set(key, this.generation(context) + 1);
+    for (const proposal of this.proposals.values()) {
+      if (proposal.windowId !== context.windowId || proposal.contextId !== context.contextId) continue;
+      this.proposals.delete(proposal.id);
+      await rm(proposal.cleanupPath, { recursive: true, force: true });
+    }
+  }
+
+  private contextKey(context: CommandContext): string { return `${context.contextId}:${context.windowId}`; }
+  private generation(context: CommandContext): number { return this.generations.get(this.contextKey(context)) ?? 0; }
+  private assertActive(context: CommandContext, generation: number): void {
+    if (this.disposed || generation !== this.generation(context)) throw new BrowserError('CANCELLED', '扩展准备已取消，下载结束后自动清理临时文件');
   }
 }

@@ -15,6 +15,8 @@ import { shieldsCommandSchemas, type ShieldsCommandResults, type ShieldsState, t
 import { syncCommandSchemas, type SyncCommandResults, type SyncState } from './sync';
 import { privacyCommandSchemas, type PrivacyCommandResults, type PrivacyState } from './fingerprint-privacy';
 import { contentServicesCommandSchemas, type ContentServicesCommandResults, type NewsState } from './content-services';
+import { walletCommandSchemas, type WalletCommandResults, type WalletState } from './wallet';
+import { rewardsCommandSchemas, type RewardsCommandResults, type RewardsState } from './rewards';
 import type { WireError } from '../errors';
 
 export const WIRE_VERSION = 1;
@@ -29,6 +31,8 @@ export const commandSchemas = {
   ...syncCommandSchemas,
   ...privacyCommandSchemas,
   ...contentServicesCommandSchemas,
+  ...walletCommandSchemas,
+  ...rewardsCommandSchemas,
 };
 export type CommandName = keyof typeof commandSchemas;
 export type CommandInput<Name extends CommandName> = z.input<(typeof commandSchemas)[Name]>;
@@ -37,7 +41,7 @@ export type CommandResults = BrowserCommandResults & TabGroupCommandResults & Bo
   & SettingsCommandResults & DownloadsCommandResults & SiteSettingsCommandResults
   & CredentialsCommandResults & PageToolsCommandResults & NewTabCommandResults
   & LeoCommandResults & ExtensionsCommandResults & ShieldsCommandResults & SyncCommandResults & PrivacyCommandResults
-  & ContentServicesCommandResults;
+  & ContentServicesCommandResults & WalletCommandResults & RewardsCommandResults;
 export type CommandEnvelope = {
   version: typeof WIRE_VERSION; requestId: string; command: CommandName; payload: unknown;
 };
@@ -61,6 +65,8 @@ export interface BrowserEvents {
   'sync.changed': SyncState;
   'privacy.changed': PrivacyState;
   'news.changed': NewsState;
+  'wallet.changed': WalletState;
+  'rewards.changed': RewardsState;
   'app.error': WireError;
 }
 export type EventName = keyof BrowserEvents;

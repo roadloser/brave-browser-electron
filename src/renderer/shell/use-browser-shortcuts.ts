@@ -18,6 +18,8 @@ export function useBrowserShortcuts(currentWindow: WindowSnapshot | undefined) {
         action = event.shiftKey ? browserClient.command('browser.reopenClosedTab', {}) : browserClient.command('browser.openTab', {});
       } else if (modifier && key === 'n') {
         action = browserClient.command('browser.openWindow', { isPrivate: event.shiftKey });
+      } else if (modifier && key === 'o') {
+        action = browserClient.command('browser.openFile', {});
       } else if (modifier && key === 'w' && active) {
         action = browserClient.command('browser.closeTab', { tabId: active });
       } else if (modifier && key === 'r' && active) {

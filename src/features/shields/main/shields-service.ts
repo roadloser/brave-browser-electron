@@ -35,6 +35,9 @@ export class ShieldsService {
       if (event.type === 'tabClosed') { this.tabs.delete(event.tabId); this.decisions.remove(event.tabId); }
       if (event.type === 'contextDisposed') {
         this.privatePolicies.delete(event.context.contextId);
+        for (const [tabId, tab] of this.tabs) if (tab.contextId === event.context.contextId) {
+          this.tabs.delete(tabId); this.decisions.remove(tabId);
+        }
         if (event.context.isPrivate) for (const [session, attached] of this.sessions) {
           if (attached.contextId === event.context.contextId) { attached.release(); this.sessions.delete(session); }
         }
@@ -192,7 +195,8 @@ export class ShieldsService {
       : this.profile(context.profileId).repository.policy(origin);
   }
   private acceptState(state: BrowserSnapshot) {
-    this.tabs.clear();
+    const windowIds = new Set(state.windows.map(window => window.id));
+    for (const [tabId, tab] of this.tabs) if (windowIds.has(tab.windowId)) this.tabs.delete(tabId);
     for (const window of state.windows) for (const tab of window.tabs) this.tabs.set(tab.id, tab);
   }
   private ownedTab(context: CommandContext, tabId: string) {

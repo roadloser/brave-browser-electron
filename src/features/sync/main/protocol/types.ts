@@ -1,9 +1,12 @@
 import type { EncryptedData } from '../crypto/nigori';
 import type { SyncLocalItem, SyncLocalType } from '../../../../shared/sync-data-ports';
+import type { SessionSpecifics } from './session-controller';
 
 export type Specifics = {
  encrypted?: EncryptedData; bookmark?: Record<string, unknown>; preference?: { name?: string; value?: string };
  history?: Record<string, unknown>; nigori?: NigoriSpecifics; device_info?: Record<string, unknown>;
+ password?: { encrypted?: EncryptedData };
+ session?: SessionSpecifics;
  history_delete_directive?: { global_id_directive?: { global_id?: string[]; start_time_usec?: string; end_time_usec?: string }; time_range_directive?: { start_time_usec?: string; end_time_usec?: string; app_id?: string }; url_directive?: { url?: string; end_time_usec?: string; app_id?: string } };
 };
 export type NigoriSpecifics = {
