@@ -45,19 +45,20 @@ export function installBraveCanvasPolicy(bridge: CanvasFarblingBridge): { instal
       return farble(Reflect.apply(original, this, args) as ImageData);
     });
     patch(htmlPrototype, 'toDataURL', original => function(this: HTMLCanvasElement, ...args) {
-      if (!this.width || !this.height) return Reflect.apply(original, this, args);
+      if (!this.width || !this.height || !contexts.hasContext(this)) return Reflect.apply(original, this, args);
       return Reflect.apply(original, exports.html(this), args);
     });
     patch(htmlPrototype, 'toBlob', original => function(this: HTMLCanvasElement, ...args) {
-      if (!this.width || !this.height) return Reflect.apply(original, this, args);
+      if (typeof args[0] !== 'function' || !this.width || !this.height || !contexts.hasContext(this)) return Reflect.apply(original, this, args);
       return Reflect.apply(original, exports.html(this), args);
     });
     patch(offscreenPrototype, 'convertToBlob', original => function(this: OffscreenCanvas, ...args) {
-      if (!this.width || !this.height) return Reflect.apply(original, this, args);
+      if (!this.width || !this.height || !contexts.hasContext(this)) return Reflect.apply(original, this, args);
       try { return Reflect.apply(original, exports.offscreen(this), args); }
       catch (error) { return Promise.reject(error); }
     });
     failures.push('Canvas导出采用同色域/格式clone；原生SkPixmap预乘alpha、native通道顺序与rowBytes未运行对照');
+    failures.push('未登记context的画布导出保留原生行为；此分支未声明像素防护覆盖');
     return { installed: coveredApis.length > 0, coveredApis, failures };
   } catch {
     release.reverse().forEach(restore => restore());

@@ -44,4 +44,6 @@ export class CanvasContextRegistry implements CanvasContextPort {
       alpha: attributes?.alpha ?? true,
     };
   }
+
+  hasContext(canvas: CanvasSource): boolean { return this.contexts.has(canvas); }
 }
