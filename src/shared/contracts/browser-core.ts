@@ -45,6 +45,7 @@ export type CoreEvent =
   | { type: 'windowReady'; windowId: string; context: BrowserContext }
   | { type: 'navigationCommitted'; visit: NavigationCommitted }
   | { type: 'frameOriginObserved'; context: BrowserContext; windowId: string; tabId: string; origin: string; timestamp: number }
+  | { type: 'zoomChanged'; context: BrowserContext; windowId: string; tabId: string; factor: number }
   | { type: 'tabClosed'; context: BrowserContext; windowId: string; tabId: string }
   | { type: 'sessionCreated'; context: BrowserContext }
   | { type: 'contextDisposed'; context: BrowserContext };
