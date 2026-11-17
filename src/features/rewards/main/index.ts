@@ -4,9 +4,10 @@ import { RewardsService } from './rewards-service';
 import { registerRewardsIpc } from './register-ipc';
 import { adsTokenMigrations } from './ads/token-repository';
 import { adsDeliveryMigrations } from './ads/delivery-repository';
+import { externalAccountMigrations } from './providers/external-repository';
 
 export const rewardsFeature: FeatureDefinition = {
-  id: 'rewards', migrations: [...rewardsMigrations, ...adsTokenMigrations, ...adsDeliveryMigrations],
+  id: 'rewards', migrations: [...rewardsMigrations, ...adsTokenMigrations, ...adsDeliveryMigrations, ...externalAccountMigrations],
   register(runtime) {
     const service = new RewardsService(runtime);
     const stopCommands = registerRewardsIpc(runtime, service);
