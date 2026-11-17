@@ -241,8 +241,12 @@ export class BrowserCore implements BrowserCorePort {
     try {
       for (const profile of this.profiles.list()) {
         this.options.onProfileReady?.(profile.id);
-        if (this.preferences.get(profile.id)?.startup === 'new-tab') continue;
-        for (const saved of this.repository.read(profile.id)) {
+        const savedWindows = this.repository.read(profile.id);
+        if (this.preferences.get(profile.id)?.startup === 'new-tab') {
+          if (savedWindows.length) await this.openWindow({ profileId: profile.id });
+          continue;
+        }
+        for (const saved of savedWindows) {
           const window = await this.createWindow(profile.id, false, saved);
           for (const tab of saved.tabs) await this.tabs.create(window, { active: false }, tab);
           if (saved.activeTabId && window.tabIds.includes(saved.activeTabId)) window.activeTabId = saved.activeTabId;

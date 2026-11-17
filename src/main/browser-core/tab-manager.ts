@@ -5,6 +5,7 @@ import type { TabSnapshot } from '../../shared/contracts/browser-core';
 import type { SavedTab, TabRecord, WindowRecord } from './core-state';
 import { SessionRegistry } from './session-registry';
 import { NavigationController } from './navigation-controller';
+import { isInternalPage } from './internal-pages';
 
 export class TabManager {
   readonly records = new Map<string, TabRecord>();
@@ -77,7 +78,8 @@ export class TabManager {
     if (tab.snapshot.windowId !== window.id) throw new BrowserError('FORBIDDEN', '标签不属于当前窗口');
     window.activeTabId = tabId;
     this.changed(window);
-    tab.view.webContents.focus();
+    if (isInternalPage(tab.snapshot.url)) window.native.webContents.focus();
+    else tab.view.webContents.focus();
   }
 
   close(window: WindowRecord, tabId: string, remember = true): void {
@@ -107,6 +109,12 @@ export class TabManager {
     const tab = this.get(tabId);
     const saved = this.save(tabId);
     const contents = tab.view.webContents;
+    const rejected = (event: Electron.Event) => {
+      if (!event.defaultPrevented) {
+        contents.removeListener('destroyed', closed);
+        this.closing.delete(tabId);
+      }
+    };
     const closed = () => {
       this.closing.delete(tabId);
       const history = this.closed.get(window.id) ?? [];
@@ -115,10 +123,12 @@ export class TabManager {
       this.close(window, tabId, false);
       committed();
     };
+    contents.once('will-prevent-unload', rejected);
     contents.once('destroyed', closed);
     contents.close({ waitForBeforeUnload: true });
     setTimeout(() => {
       if (!contents.isDestroyed()) contents.removeListener('destroyed', closed);
+      if (!contents.isDestroyed()) contents.removeListener('will-prevent-unload', rejected);
       this.closing.delete(tabId);
     }, 30000);
   }

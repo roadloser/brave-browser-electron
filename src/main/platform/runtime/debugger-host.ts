@@ -85,6 +85,9 @@ export class DebuggerHost implements DebuggerHostPort {
           const resumes = [...current.pausedSessions].map(sessionId => current.contents.debugger.sendCommand('Debugger.resume', {}, sessionId || undefined).catch(() => undefined));
           current.pausedSessions.clear();
           void Promise.allSettled(resumes).finally(() => {
+            if (current.active && !current.contents.isDestroyed() && current.leases.size && ![...current.leases].some(activeLease => activeLease.owner === 'fingerprint-privacy' && !activeLease.released)) {
+              void current.contents.debugger.sendCommand('Debugger.disable').catch(() => undefined);
+            }
             if (!current.leases.size) this.release(tabId, current);
           });
         } else if (!current.leases.size) this.release(tabId, current);
