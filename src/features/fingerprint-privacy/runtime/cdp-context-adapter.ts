@@ -7,9 +7,9 @@ import { BootstrapPauseController } from './bootstrap-pause-controller';
 import { WorldControllerHost } from './world-controller-host';
 import { parsePrivacyStorageKey, type PrivacyStorageScope } from './storage-key';
 import type { WorldInstallResult, WorldPrivacyPolicy } from './world-types';
+import type { RuntimeOutcome, RuntimeOutcomeUpdate } from './runtime-outcome';
 
 type ExecutionContext = { id: number; origin: string; auxData?: { frameId?: string; isDefault?: boolean; type?: string } };
-type RuntimeOutcome = { context: ExecutionContextKind; applied: boolean; reason: string; coveredApis?: string[]; failures?: string[]; firstRead?: 'prepared' | 'unknown' | 'failed' };
 
 export class CdpPrivacyContextAdapter {
   private debugger!: DebuggerLease;
@@ -27,7 +27,7 @@ export class CdpPrivacyContextAdapter {
   constructor(private readonly tab: TabSnapshot, private readonly debuggerHost: DebuggerHostPort,
     private readonly policy: (scope: PrivacyStorageScope, kind: ExecutionContextKind) => WorldPrivacyPolicy,
     private readonly worldSource: string,
-    private readonly outcome: (result: RuntimeOutcome) => void) {
+    private readonly coverage: (update: RuntimeOutcomeUpdate) => void) {
   }
 
   async start(): Promise<void> {
@@ -39,10 +39,10 @@ export class CdpPrivacyContextAdapter {
     }
     this.pauses = new BootstrapPauseController(this.debugger,
       (contextId, callFrameId, sessionId) => this.injectPaused(contextId, callFrameId, sessionId),
-      error => this.outcome({ context: 'iframe', applied: false, reason: error instanceof Error ? error.message : '首读屏障失败' }));
+      error => this.record('root:bootstrap-failure', { context: 'iframe', applied: false, reason: error instanceof Error ? error.message : '首读屏障失败' }));
     this.releases.push(this.debugger.onMessage((method, parameters, sessionId) => {
       void this.message(method, parameters, sessionId).catch(error => {
-        this.outcome({ context: sessionId ? this.childKinds.get(sessionId) ?? 'dedicated-worker' : 'iframe', applied: false, reason: error instanceof Error ? error.message : '运行时映射失败' });
+        this.record(`${sessionId ?? 'root'}:runtime-failure`, { context: sessionId ? this.childKinds.get(sessionId) ?? 'dedicated-worker' : 'iframe', applied: false, reason: error instanceof Error ? error.message : '运行时映射失败' });
       });
     }));
     await this.debugger.send('Page.enable');
@@ -83,7 +83,7 @@ export class CdpPrivacyContextAdapter {
   private async message(method: string, parameters: Record<string, unknown>, sessionId?: string): Promise<void> {
     if (this.disposed) return;
     if (method === 'Inspector.detached') {
-      this.outcome({ context: 'iframe', applied: false, reason: `共享调试连接已断开：${String(parameters.reason ?? 'unknown')}；子上下文适配已失效` });
+      this.coverage({ type: 'invalidate', reason: `共享调试连接已断开：${String(parameters.reason ?? 'unknown')}；子上下文适配已失效` });
       this.dispose();
     } else if (method === 'Debugger.scriptParsed') {
       this.pauses?.parsed(parameters, sessionId);
@@ -99,9 +99,11 @@ export class CdpPrivacyContextAdapter {
       }
     } else if (method === 'Runtime.executionContextDestroyed') {
       this.controllers.releaseContext(Number(parameters.executionContextId), sessionId);
+      this.coverage({ type: 'remove', identity: this.key(sessionId, Number(parameters.executionContextId)) });
       this.contexts.delete(this.key(sessionId, Number(parameters.executionContextId)));
     } else if (method === 'Runtime.executionContextsCleared') {
       this.controllers.releaseSession(sessionId);
+      this.coverage({ type: 'remove-session', sessionId });
       for (const key of this.contexts.keys()) if (key.startsWith(`${sessionId ?? 'root'}:`)) this.contexts.delete(key);
     } else if (method === 'Target.attachedToTarget') {
       const childSession = typeof parameters.sessionId === 'string' ? parameters.sessionId : undefined;
@@ -121,7 +123,7 @@ export class CdpPrivacyContextAdapter {
         }
         if (kind === 'worklet') {
           if (!this.rootOrigin) {
-            this.outcome({ context: kind, applied: false, firstRead: 'failed', reason: 'threaded Worklet未取得创建者顶层真实origin，拒绝以module URL替代' });
+            this.record(`${childSession}:target`, { context: kind, applied: false, firstRead: 'failed', reason: 'threaded Worklet未取得创建者顶层真实origin，拒绝以module URL替代' });
             return;
           }
           const policy = this.policy({ origin: this.rootOrigin, topLevelSite: this.rootOrigin, nonce: null }, kind);
@@ -129,7 +131,7 @@ export class CdpPrivacyContextAdapter {
             expression: cdpWorldSource(this.worldSource, policy), returnByValue: false,
           }, childSession);
           const installed = await this.controllerReport(`${childSession}:target`, result.result?.objectId, childSession);
-          this.outcome({ context: kind, applied: installed.installed, coveredApis: installed.coveredApis,
+          this.record(`${childSession}:target`, { context: kind, applied: installed.installed, coveredApis: installed.coveredApis,
             failures: installed.failures, firstRead: 'prepared',
             reason: '按Brave继承创建者top-frame策略且off-main不加nonce；仅Paint严格hit-test暴露项，未运行对照' });
           return;
@@ -142,14 +144,14 @@ export class CdpPrivacyContextAdapter {
           parsed.origin = this.rootOrigin;
         }
         if (!parsed) {
-          this.outcome({ context: kind, applied: false, reason: parsed?.nonce ? '真实StorageKey含nonce，尚未映射Brave FastHash，保持原API' : '目标未提供可映射的真实StorageKey' });
+          this.record(`${childSession}:target`, { context: kind, applied: false, reason: '目标未提供可映射的真实StorageKey' });
         } else {
           const policy = this.policy(parsed, kind);
           const result = await this.debugger.send<{ result?: { objectId?: string } }>('Runtime.evaluate', {
             expression: cdpWorldSource(this.worldSource, policy), returnByValue: false, awaitPromise: false,
           }, childSession);
           const installed = await this.controllerReport(`${childSession}:target`, result.result?.objectId, childSession);
-          this.outcome({ context: kind, applied: Boolean(installed?.installed), coveredApis: installed?.coveredApis, failures: installed?.failures, firstRead: 'prepared',
+          this.record(`${childSession}:target`, { context: kind, applied: Boolean(installed?.installed), coveredApis: installed?.coveredApis, failures: installed?.failures, firstRead: 'prepared',
             reason: installed?.installed ? '已在目标恢复前安装固定算法bundle，未进行行为对照' : '目标无对应API或策略关闭' });
         }
       } finally {
@@ -158,6 +160,7 @@ export class CdpPrivacyContextAdapter {
       }
     } else if (method === 'Target.detachedFromTarget' && typeof parameters.sessionId === 'string') {
       this.controllers.releaseSession(parameters.sessionId);
+      this.coverage({ type: 'remove-session', sessionId: parameters.sessionId });
       this.childKinds.delete(parameters.sessionId);
     } else if (method === 'Page.frameNavigated' && !sessionId) {
       const frame = parameters.frame as { id?: string; parentId?: string; url?: string; securityOrigin?: string } | undefined;
@@ -175,14 +178,14 @@ export class CdpPrivacyContextAdapter {
       const scope = await this.debugger.send<{ storageKey: string }>('Storage.getStorageKey', context.auxData?.frameId ? { frameId: context.auxData.frameId } : {}, sessionId);
       const parsed = parsePrivacyStorageKey(scope.storageKey);
       if (!parsed) {
-        this.outcome({ context: kind, applied: false, reason: parsed?.nonce ? 'StorageKey nonce已识别，FastHash尚未映射，不注入错误token' : '无法映射真实StorageKey' });
+        this.record(this.key(sessionId, context.id), { context: kind, applied: false, reason: '无法映射真实StorageKey' });
         return;
       }
       const result = await this.debugger.send<{ result?: { objectId?: string } }>('Runtime.evaluate', {
         contextId: context.id, expression: cdpWorldSource(this.worldSource, this.policy(parsed, kind)), returnByValue: false,
       }, sessionId);
       const installed = await this.controllerReport(this.key(sessionId, context.id), result.result?.objectId, sessionId, context.id);
-      this.outcome({ context: kind, applied: installed.installed, coveredApis: installed.coveredApis, failures: installed.failures, firstRead: 'unknown',
+      this.record(this.key(sessionId, context.id), { context: kind, applied: installed.installed, coveredApis: installed.coveredApis, failures: installed.failures, firstRead: 'unknown',
         reason: '基于真实StorageKey安装固定算法bundle，contextCreated异步路径首脚本读取时序尚未证明' });
     } finally { this.initializing.delete(key); }
   }
@@ -194,19 +197,20 @@ export class CdpPrivacyContextAdapter {
     const result = await this.debugger.send<{ storageKey: string }>('Storage.getStorageKey', { frameId: context.auxData.frameId }, sessionId);
     const scope = parsePrivacyStorageKey(result.storageKey);
     if (!scope) {
-      this.outcome({ context: kind, applied: false, firstRead: 'failed', reason: scope?.nonce ? '首读暂停已取得真实nonce，FastHash尚未映射，拒绝错误token' : '首读暂停未取得合法StorageKey' });
+      this.record(this.key(sessionId, contextId), { context: kind, applied: false, firstRead: 'failed', reason: '首读暂停未取得合法StorageKey' });
       return;
     }
     const result = await this.debugger.send<{ result?: { objectId?: string } }>('Debugger.evaluateOnCallFrame', {
       callFrameId, expression: cdpWorldSource(this.worldSource, this.policy(scope, kind)), returnByValue: false, timeout: 4000,
     }, sessionId);
     const installed = await this.controllerReport(this.key(sessionId, contextId), result.result?.objectId, sessionId, contextId);
-    this.outcome({ context: kind, applied: installed.installed, coveredApis: installed.coveredApis,
+    this.record(this.key(sessionId, contextId), { context: kind, applied: installed.installed, coveredApis: installed.coveredApis,
       failures: installed.failures, firstRead: 'prepared',
       reason: '自身nonce bootstrap暂停内依据真实StorageKey安装固定算法bundle后恢复；首读代码链已闭合，尚未运行对照' });
   }
 
   private key(sessionId: string | undefined, contextId: number): string { return `${sessionId ?? 'root'}:${contextId}`; }
+  private record(identity: string, outcome: Omit<RuntimeOutcome, 'identity'>): void { this.coverage({ type: 'record', outcome: { ...outcome, identity } }); }
   private controllerReport(identity: string, objectId: string | undefined, sessionId?: string, contextId?: number): Promise<WorldInstallResult> {
     if (!objectId) throw new BrowserError('UNAVAILABLE', '页面运行时未建立受控对象');
     return this.controllers.register(identity, objectId, sessionId, contextId);

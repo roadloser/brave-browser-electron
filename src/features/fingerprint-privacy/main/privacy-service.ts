@@ -9,9 +9,9 @@ import { BraveTokenProvider, type FarblingTokenProviderPort } from './token-prov
 import { resolvePrivacySite } from './site-scope-resolver';
 import { privacyCapabilities } from './capability-registry';
 import { CdpPrivacyContextAdapter } from '../runtime/cdp-context-adapter';
-import type { ExecutionContextKind } from '../../../shared/contracts/fingerprint-privacy';
-import { capabilityWithOutcome, coverageFromOutcomes, type RuntimeOutcome } from './runtime-coverage';
+import { capabilityWithOutcome, coverageFromOutcomes } from './runtime-coverage';
 import { chromiumNonceHash } from './chromium-nonce-hash';
+import { CoverageLedger } from './coverage-ledger';
 
 export class PrivacyService {
   private readonly tokens: FarblingTokenProviderPort;
@@ -20,7 +20,7 @@ export class PrivacyService {
   private readonly stopCore;
   private readonly stopPreparation;
   private readonly cdpContexts = new Map<string, CdpPrivacyContextAdapter>();
-  private readonly cdpOutcomes = new Map<string, Map<ExecutionContextKind, RuntimeOutcome>>();
+  private readonly cdpOutcomes = new Map<string, CoverageLedger>();
   private readonly generation = Date.now();
   private revision = 0;
 
@@ -30,8 +30,8 @@ export class PrivacyService {
       if (event.type === 'stateChanged') this.acceptState(event.state);
       if (event.type === 'zoomChanged') {
         void this.cdpContexts.get(event.tabId)?.updateZoom(event.factor).catch(error => {
-          const outcomes = this.cdpOutcomes.get(event.tabId) ?? new Map();
-          outcomes.set('window', { context: 'window', applied: false, firstRead: 'unknown', reason: error instanceof Error ? error.message : '缩放策略更新失败' });
+          const outcomes = this.cdpOutcomes.get(event.tabId) ?? new CoverageLedger();
+          outcomes.update({ type: 'record', outcome: { identity: 'root:zoom', context: 'window', applied: false, firstRead: 'unknown', reason: error instanceof Error ? error.message : '缩放策略更新失败' } });
           this.cdpOutcomes.set(event.tabId, outcomes);
           this.runtime.publish('privacy.changed', this.state(event.context, this.tabs.get(event.tabId)?.url, event.tabId), { windowId: event.windowId });
         });
@@ -102,10 +102,10 @@ export class PrivacyService {
     return {
       mode: siteMode ?? defaultMode, defaultMode, site, inherited: siteMode === undefined,
       runtimeVersion: 'electron43-chromium150-brave-algorithms-v3', capabilities: privacyCapabilities().map(capability => {
-        const outcome = tabId ? this.cdpOutcomes.get(tabId)?.get(capability.context) : undefined;
+        const outcome = tabId ? this.cdpOutcomes.get(tabId)?.aggregate().get(capability.context) : undefined;
         return capabilityWithOutcome(capability, outcome);
       }),
-      coverage: coverageFromOutcomes(tabId ? this.cdpOutcomes.get(tabId) : undefined),
+      coverage: coverageFromOutcomes(tabId ? this.cdpOutcomes.get(tabId)?.aggregate() : undefined),
       scope: site ? { profileId: context.profileId, contextId: context.contextId, site, generation: this.generation } : null,
       revision: this.revision + repository.state().revision,
     };
@@ -136,6 +136,7 @@ export class PrivacyService {
       this.runtime.publish('privacy.changed', this.state(tab, tab.url, tab.id), { windowId: tab.windowId });
       if (this.cdpContexts.has(tab.id) && this.effectiveMode(tab, resolvePrivacySite(tab.url) ?? '') === 'off') {
         this.cdpContexts.get(tab.id)?.dispose(); this.cdpContexts.delete(tab.id);
+        this.cdpOutcomes.delete(tab.id);
       } else if (!this.cdpContexts.has(tab.id)) await this.prepareContext(tab);
       this.runtime.core.reload(tab.id);
     }
@@ -156,17 +157,17 @@ export class PrivacyService {
         scope: sourceSite, hardwareConcurrency: cpus().length, webglBalanced: false,
         pageZoom: this.runtime.core.getTabWebContents(tab.id).getZoomFactor(),
         screenFingerprinting: process.platform === 'darwin' && (kind === 'window' || kind === 'iframe') };
-    }, this.runtime.assets.privacyWorldSource, outcome => {
-      const outcomes = this.cdpOutcomes.get(tab.id) ?? new Map();
-      outcomes.set(outcome.context, outcome); this.cdpOutcomes.set(tab.id, outcomes);
+    }, this.runtime.assets.privacyWorldSource, update => {
+      const outcomes = this.cdpOutcomes.get(tab.id) ?? new CoverageLedger();
+      outcomes.update(update); this.cdpOutcomes.set(tab.id, outcomes);
       this.revision++;
       this.runtime.publish('privacy.changed', this.state(tab, tab.url, tab.id), { windowId: tab.windowId });
     });
     try { await adapter.start(); this.cdpContexts.set(tab.id, adapter); }
     catch (error) {
       adapter.dispose();
-      const outcomes = this.cdpOutcomes.get(tab.id) ?? new Map();
-      outcomes.set('iframe', { applied: false, reason: error instanceof Error ? error.message : 'CDP准备失败' });
+      const outcomes = this.cdpOutcomes.get(tab.id) ?? new CoverageLedger();
+      outcomes.update({ type: 'record', outcome: { identity: 'root:setup', context: 'window', applied: false, reason: error instanceof Error ? error.message : 'CDP准备失败' } });
       this.cdpOutcomes.set(tab.id, outcomes);
       this.runtime.publish('privacy.changed', this.state(tab, tab.url, tab.id), { windowId: tab.windowId });
       throw error;
