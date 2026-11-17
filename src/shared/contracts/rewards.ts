@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+export const rewardsProviderSchema = z.enum(['uphold', 'bitflyer', 'zebpay']);
+export type RewardsProviderName = z.infer<typeof rewardsProviderSchema>;
+
 export type RewardsState = {
   status: 'unconfigured' | 'ready' | 'registering' | 'registered' | 'refreshing' | 'cancelled' | 'failed' | 'needs-authorization';
   endpoint: string; hasServiceKey: boolean; country: string | null;
@@ -20,6 +23,10 @@ export type RewardsState = {
     confirmationStatus: 'idle' | 'running' | 'failed'; settlementStatus: 'idle' | 'running' | 'confirmed' | 'unknown' | 'failed';
     reason?: string; error?: string;
   };
+  externalAccount?: {
+    provider: RewardsProviderName; status: 'authorizing' | 'preparing' | 'claiming' | 'connected' | 'unknown' | 'failed' | 'signed-out';
+    displayName?: string; address?: string; error?: string; balance: string | null; balanceAt: number | null;
+  };
   capabilities: { operation: string; status: 'implemented' | 'blocked' | 'unknown'; reason?: string }[];
   lastRequestId: string | null; error?: string; revision: number;
 };
@@ -39,6 +46,10 @@ export const rewardsCommandSchemas = {
   'rewards.refreshAds': z.object({}),
   'rewards.retryAdsConfirmations': z.object({}),
   'rewards.redeemPaymentTokens': z.object({ confirmed: z.literal(true) }),
+  'rewards.connectExternal': z.object({ provider: rewardsProviderSchema, confirmed: z.literal(true) }),
+  'rewards.resumeExternal': z.object({ confirmed: z.literal(true) }),
+  'rewards.refreshExternalBalance': z.object({}),
+  'rewards.signOutExternal': z.object({ confirmed: z.literal(true) }),
 };
 export interface RewardsCommandResults {
   'rewards.get': RewardsState;
@@ -53,4 +64,8 @@ export interface RewardsCommandResults {
   'rewards.refreshAds': RewardsState;
   'rewards.retryAdsConfirmations': RewardsState;
   'rewards.redeemPaymentTokens': RewardsState;
+  'rewards.connectExternal': RewardsState;
+  'rewards.resumeExternal': RewardsState;
+  'rewards.refreshExternalBalance': RewardsState;
+  'rewards.signOutExternal': RewardsState;
 }
