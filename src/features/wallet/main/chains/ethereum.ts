@@ -1,4 +1,5 @@
-import { HDNodeWallet, JsonRpcProvider, getAddress, formatUnits, parseUnits, keccak256, type TransactionRequest } from 'ethers';
+import { HDNodeWallet, getAddress, formatUnits, parseUnits, keccak256, type TransactionRequest } from 'ethers';
+import { ethereumProvider } from './ethereum-provider';
 import type { WalletAccount, WalletNetwork } from '../../../../shared/contracts/wallet';
 import { BrowserError } from '../../../../shared/errors';
 import type { ChainAdapterPort, KeyMaterial, PreparedTransfer, SignedTransfer, TransferIntent } from './adapter';
@@ -11,11 +12,11 @@ export class EthereumAdapter implements ChainAdapterPort {
   private wallet(key: KeyMaterial) { return HDNodeWallet.fromPhrase(key.mnemonic, '', `m/44'/60'/0'/0/${key.index}`); }
   async derive(key: KeyMaterial) { return this.wallet(key).address; }
   async balance(account: WalletAccount, network: WalletNetwork) {
-    const provider = new JsonRpcProvider(network.rpcUrl);
+    const provider = ethereumProvider(network.rpcUrl);
     try { return (await provider.getBalance(account.address)).toString(); } finally { provider.destroy(); }
   }
   async prepare(key: KeyMaterial, account: WalletAccount, network: WalletNetwork, intent: TransferIntent): Promise<PreparedTransfer> {
-    const provider = new JsonRpcProvider(network.rpcUrl);
+    const provider = ethereumProvider(network.rpcUrl);
     try {
       const address = getAddress(intent.to);
       const connected = this.wallet(key).connect(provider);
@@ -38,11 +39,11 @@ export class EthereumAdapter implements ChainAdapterPort {
   async signBytes(key: KeyMaterial, _network: WalletNetwork, message: Uint8Array) { return this.wallet(key).signMessage(message); }
   prepareDapp(key: KeyMaterial, account: WalletAccount, network: WalletNetwork, payload: unknown) { return prepareEthereumDapp(key, account, network, payload); }
   async broadcast(network: WalletNetwork, signed: SignedTransfer) {
-    const provider = new JsonRpcProvider(network.rpcUrl);
+    const provider = ethereumProvider(network.rpcUrl);
     try { return (await provider.broadcastTransaction(signed.payload)).hash; } finally { provider.destroy(); }
   }
   async status(network: WalletNetwork, hash: string) {
-    const provider = new JsonRpcProvider(network.rpcUrl);
+    const provider = ethereumProvider(network.rpcUrl);
     try {
       const receipt = await provider.getTransactionReceipt(hash);
       return receipt ? receipt.status === 1 ? 'confirmed' as const : 'failed' as const : 'pending' as const;

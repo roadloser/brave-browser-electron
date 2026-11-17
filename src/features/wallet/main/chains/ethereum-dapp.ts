@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { HDNodeWallet, JsonRpcProvider, getAddress, formatUnits } from 'ethers';
+import { HDNodeWallet, getAddress, formatUnits } from 'ethers';
+import { ethereumProvider } from './ethereum-provider';
 import type { WalletAccount, WalletNetwork } from '../../../../shared/contracts/wallet';
 import { BrowserError } from '../../../../shared/errors';
 import type { KeyMaterial, PreparedTransfer } from './adapter';
@@ -14,7 +15,7 @@ const transactionSchema = z.object({
 export async function prepareEthereumDapp(key: KeyMaterial, account: WalletAccount, network: WalletNetwork, input: unknown): Promise<PreparedTransfer> {
   const source = transactionSchema.parse(input);
   if (getAddress(source.from) !== getAddress(account.address)) throw new BrowserError('FORBIDDEN', '交易账户与授权不一致');
-  const provider = new JsonRpcProvider(network.rpcUrl);
+  const provider = ethereumProvider(network.rpcUrl);
   try {
     const actual = await provider.getNetwork();
     if (network.chainId && actual.chainId !== BigInt(network.chainId)) throw new BrowserError('CONFLICT', 'RPC网络与配置不一致');

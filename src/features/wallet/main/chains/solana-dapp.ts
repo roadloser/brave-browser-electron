@@ -1,4 +1,5 @@
-import { Connection, PublicKey, Transaction, VersionedTransaction } from '@solana/web3.js';
+import { PublicKey, Transaction, VersionedTransaction } from '@solana/web3.js';
+import { solanaConnection } from './solana-connection';
 import { z } from 'zod';
 import type { WalletAccount, WalletNetwork } from '../../../../shared/contracts/wallet';
 import type { PreparedTransfer } from './adapter';
@@ -17,7 +18,7 @@ export async function prepareSolanaDapp(account: WalletAccount, network: WalletN
   const signerIndex = signerKeys.slice(0, message.header.numRequiredSignatures).findIndex((key) => key.equals(new PublicKey(account.address)));
   if (signerIndex < 0) throw new BrowserError('FORBIDDEN', '交易没有请求当前账户签名');
   if (signerIndex !== 0) throw new BrowserError('UNAVAILABLE', '当前站点交易要求共同签名，需专门多签确认映射');
-  const connection = new Connection(network.rpcUrl, 'confirmed');
+  const connection = solanaConnection(network.rpcUrl);
   const fee = (await connection.getFeeForMessage(message)).value;
   if (fee === null) throw new BrowserError('UNAVAILABLE', '交易区块哈希已过期或网络费不可用');
   let programs: string[];

@@ -1,4 +1,4 @@
-import { ApiPromise, HttpProvider } from '@polkadot/api';
+import { polkadotProvider } from './polkadot-provider';
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
 import type { WalletAccount, WalletNetwork } from '../../../../shared/contracts/wallet';
@@ -14,7 +14,7 @@ export class PolkadotAdapter implements ChainAdapterPort {
     return new Keyring({ type: 'sr25519', ss58Format: network.testnet ? 42 : 0 })
       .addFromUri(`${key.mnemonic}${key.index ? '//'+String(key.index - 1) : ''}`);
   }
-  private api(network: WalletNetwork) { return ApiPromise.create({ provider: new HttpProvider(network.rpcUrl), noInitWarn: true }); }
+  private api(network: WalletNetwork) { return polkadotProvider(network.rpcUrl); }
   async derive(key: KeyMaterial, network: WalletNetwork) {
     const pair = await this.pair(key, network);
     try { return pair.address; } finally { pair.lock(); }

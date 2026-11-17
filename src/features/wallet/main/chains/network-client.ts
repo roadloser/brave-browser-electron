@@ -1,4 +1,4 @@
-import { net } from 'electron';
+import { walletFetch } from '../context-network';
 import { BrowserError } from '../../../../shared/errors';
 
 export function safeNetworkUrl(value: string) {
@@ -11,7 +11,7 @@ export function safeNetworkUrl(value: string) {
 }
 export async function networkFetch(url: string, init: RequestInit = {}) {
   safeNetworkUrl(url);
-  const response = await net.fetch(url, { ...init, credentials: 'omit', redirect: 'error', signal: init.signal ?? AbortSignal.timeout(20000) });
+  const response = await walletFetch(url, { ...init, credentials: 'omit', redirect: 'error', signal: init.signal ?? AbortSignal.timeout(20000) });
   if (!response.ok) throw new BrowserError('UNAVAILABLE', `链服务返回 ${response.status}`, true, { status: response.status });
   return response;
 }

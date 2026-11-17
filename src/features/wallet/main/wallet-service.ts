@@ -114,7 +114,8 @@ export class WalletService {
     this.transactions.message(context, accountId, message); return this.get(context);
   }
   async requestDappTransaction(context: CommandContext, accountId: string, payload: unknown) {
-    await this.store.serial(context, () => this.transactions.dapp(context, accountId, payload));
+    const parsed = typeof payload === 'string' ? JSON.parse(payload) : payload;
+    await this.store.serial(context, () => this.transactions.dapp(context, accountId, parsed));
     return this.get(context);
   }
   async approve(context: CommandContext, id: string) {

@@ -5,6 +5,7 @@ import { BrowserError } from '../../../shared/errors';
 import type { WalletService } from './wallet-service';
 import { handleProviderRequest } from './provider-requests';
 import { solanaChain } from './provider-solana';
+import { withWalletNetwork } from './context-network';
 
 const channel = 'brave:wallet-provider';
 const providerSchema = z.object({
@@ -54,7 +55,7 @@ export class ProviderRouter {
               runtime.core.getTab(tabId).navigationId === navigationId;
           } catch { return false; }
         };
-        const value = await handleProviderRequest(wallet, context, origin, tabId, payload, sourceIsCurrent);
+        const value = await withWalletNetwork(context, runtime.network, () => handleProviderRequest(wallet, context, origin, tabId, payload, sourceIsCurrent));
         const current = runtime.core.getTab(tabId);
         if (current.navigationId !== navigationId || event.senderFrame.isDestroyed() || new URL(event.senderFrame.url).origin !== origin) {
           throw new BrowserError('CANCELLED', '页面已改变，钱包响应已取消');
@@ -108,6 +109,6 @@ export class ProviderRouter {
     const origin = new URL(event.senderFrame.url).origin;
     if (!/^https?:\/\//.test(origin) || origin === 'null') throw new BrowserError('FORBIDDEN', '此来源不能访问钱包');
     const tab = this.runtime.core.getTab(tabId);
-    return { origin, tabId, navigationId: tab.navigationId, context: { profileId: tab.profileId, contextId: tab.contextId, isPrivate: tab.isPrivate, windowId: tab.windowId, requestId: crypto.randomUUID() } };
+    return { origin, tabId, navigationId: tab.navigationId, context: { profileId: tab.profileId, contextId: tab.contextId, isPrivate: tab.isPrivate, kind: tab.kind, windowId: tab.windowId, requestId: crypto.randomUUID() } };
   }
 }

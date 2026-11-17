@@ -1,4 +1,5 @@
-import { Connection, Keypair, PublicKey, SystemProgram, Transaction, VersionedTransaction } from '@solana/web3.js';
+import { Keypair, PublicKey, SystemProgram, Transaction, VersionedTransaction } from '@solana/web3.js';
+import { solanaConnection } from './solana-connection';
 import { mnemonicToSeedSync } from '@scure/bip39';
 import { derivePath } from 'ed25519-hd-key';
 import nacl from 'tweetnacl';
@@ -20,10 +21,10 @@ export class SolanaAdapter implements ChainAdapterPort {
   }
   async derive(key: KeyMaterial) { const pair = this.pair(key); try { return pair.publicKey.toBase58(); } finally { pair.secretKey.fill(0); } }
   async balance(account: WalletAccount, network: WalletNetwork) {
-    return String(await new Connection(network.rpcUrl, 'confirmed').getBalance(new PublicKey(account.address)));
+    return String(await solanaConnection(network.rpcUrl).getBalance(new PublicKey(account.address)));
   }
   async prepare(_key: KeyMaterial, account: WalletAccount, network: WalletNetwork, intent: TransferIntent): Promise<PreparedTransfer> {
-    const connection = new Connection(network.rpcUrl, 'confirmed');
+    const connection = solanaConnection(network.rpcUrl);
     const amount = amountToBase(intent.value, network.decimals);
     const recent = await connection.getLatestBlockhash();
     const transaction = new Transaction({ feePayer: new PublicKey(account.address), ...recent })
@@ -59,10 +60,10 @@ export class SolanaAdapter implements ChainAdapterPort {
   }
   prepareDapp(_key: KeyMaterial, account: WalletAccount, network: WalletNetwork, payload: unknown) { return prepareSolanaDapp(account, network, payload); }
   async broadcast(network: WalletNetwork, signed: SignedTransfer) {
-    return new Connection(network.rpcUrl, 'confirmed').sendRawTransaction(Buffer.from(signed.payload, 'base64'), { skipPreflight: false });
+    return solanaConnection(network.rpcUrl).sendRawTransaction(Buffer.from(signed.payload, 'base64'), { skipPreflight: false });
   }
   async status(network: WalletNetwork, hash: string) {
-    const response = await new Connection(network.rpcUrl, 'confirmed').getSignatureStatus(hash, { searchTransactionHistory: true });
+    const response = await solanaConnection(network.rpcUrl).getSignatureStatus(hash, { searchTransactionHistory: true });
     if (!response.value) return 'unknown' as const;
     if (response.value.err) return 'failed' as const;
     return ['confirmed', 'finalized'].includes(response.value.confirmationStatus ?? '') ? 'confirmed' as const : 'pending' as const;
