@@ -1,6 +1,6 @@
 import { BrowserError } from '../../shared/errors';
 
-const internalPages = new Set(['newtab', 'bookmarks', 'history', 'downloads', 'settings', 'extensions', 'credentials', 'sync']);
+const internalPages = new Set(['newtab', 'bookmarks', 'history', 'downloads', 'settings', 'extensions', 'credentials', 'sync', 'site-data']);
 const marker = 'about:blank#brave-electron:';
 
 export function isInternalPage(url: string): boolean {

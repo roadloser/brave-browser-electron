@@ -32,7 +32,10 @@ export class BrowserCore implements BrowserCorePort {
   private readonly events = new PageEventSource();
   private readonly sessions = new SessionRegistry(this.events);
   private readonly auxiliaryViews = new AuxiliaryViewManager(this.sessions);
-  private readonly pageActions = new PageActions(this);
+  private readonly pageActions = new PageActions(this, () => [...this.tabs.records.keys()], (tabId, factor) => {
+    const tab = this.getTab(tabId);
+    this.events.emit({ type: 'zoomChanged', context: { profileId: tab.profileId, contextId: tab.contextId, isPrivate: tab.isPrivate, kind: tab.kind }, windowId: tab.windowId, tabId, factor });
+  });
   private readonly navigationPreparation = new NavigationPreparation();
   private readonly windows: WindowManager;
   private readonly tabs: TabManager;
@@ -67,9 +70,11 @@ export class BrowserCore implements BrowserCorePort {
       profileId => this.preferences.get(profileId)?.searchEngine ?? 'brave',
       (windowId, result) => this.events.emit({ type: 'findResult', windowId, result }),
       this.navigationPreparation,
+      event => this.events.emit(event),
     );
     this.tabs = new TabManager(this.sessions, this.navigation, window => this.changed(window),
-      (windowId, url) => { void this.openTab({ windowId, url }).catch(error => this.reportError(error)); });
+      (windowId, url) => { void this.openTab({ windowId, url }).catch(error => this.reportError(error)); },
+      tabId => this.pageActions.observe(tabId));
     this.layout = new LayoutController(tabId => this.tabs.get(tabId));
     this.recovery = new CoreRecovery(this.profiles, this.windows, this.tabs, this.repository, error => this.reportError(error));
     this.torWindows = new TorWindowController(this.sessions, this.windows, this.events, async window => {

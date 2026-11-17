@@ -23,6 +23,6 @@ export function SitePermissionPanel({ origin }: { origin?: string }) {
       <select value={rule.decision} onChange={event => run(browserClient.command('siteSettings.set', { origin: rule.origin, permission: rule.permission, decision: event.target.value as 'allow' | 'deny' | 'ask' }))}><option value="allow">允许</option><option value="deny">禁止</option><option value="ask">每次询问</option></select>
     </article>)}
     {!state.rules.length && !state.prompts.length && <p>网站请求权限时会在这里显示。</p>}
-    {origin && <button onClick={() => { if (window.confirm('清除此站点的 Cookie 和本地数据？')) run(browserClient.command('siteSettings.clearData', { origin, cookies: true, cache: false, localStorage: true })); }}>清除此站点数据</button>}
+    {origin && <button onClick={() => run(browserClient.command('browser.openTab', { url: 'brave://site-data' }))}>查看网站数据与清理范围</button>}
   </section>;
 }

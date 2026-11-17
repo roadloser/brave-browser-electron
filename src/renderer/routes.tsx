@@ -12,6 +12,7 @@ import { PrivacySettings } from '../features/fingerprint-privacy/renderer/privac
 import { RewardsPanel } from '../features/rewards/renderer/rewards-panel';
 import { WalletPage } from '../features/wallet/renderer/wallet-page';
 import { TorPanel } from '../features/tor/renderer/tor-status';
+import { SiteDataPage } from '../features/site-settings/renderer/site-data-page';
 
 export function renderBrowserPage(url: string, context: { tab: TabSnapshot; window: WindowSnapshot }) {
   if (url === 'brave://newtab' || url === 'brave://newtab/') return <NewTabPage {...context} />;
@@ -22,6 +23,7 @@ export function renderBrowserPage(url: string, context: { tab: TabSnapshot; wind
   if (url === 'brave://wallet' || url.startsWith('brave://wallet/')) return <WalletPage />;
   if (url === 'brave://tor' || url.startsWith('brave://tor/')) return <TorPanel />;
   if (url === 'brave://settings/sites' || url === 'brave://site-settings') return <SitePermissionPanel />;
+  if (url === 'brave://site-data' || url === 'brave://settings/site-data') return <SiteDataPage />;
   if (url === 'brave://extensions' || url.startsWith('brave://extensions/')) return <ExtensionsPage />;
   if (url === 'brave://bookmarks' || url.startsWith('brave://bookmarks/')) return <BookmarksPage />;
   if (url === 'brave://history' || url.startsWith('brave://history/')) return <HistoryPage />;
