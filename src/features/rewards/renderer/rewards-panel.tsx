@@ -9,6 +9,8 @@ export function RewardsPanel() {
   const [endpoint, setEndpoint] = useState('');
   const [serviceKey, setServiceKey] = useState('');
   const [country, setCountry] = useState('');
+  const [solanaRpcUrl, setSolanaRpcUrl] = useState('');
+  const [connectOpen, setConnectOpen] = useState(false);
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -16,7 +18,7 @@ export function RewardsPanel() {
     let active = true;
     const accept = (next: RewardsState) => { if (active) setState(previous => !previous || next.revision >= previous.revision ? next : previous); };
     const release = browserClient.on('rewards.changed', accept);
-    void browserClient.command('rewards.get', {}).then(next => { if (active) { accept(next); setEndpoint(next.endpoint); setCountry(next.country ?? ''); } }).catch(problem => { if (active) setError(problem instanceof Error ? problem.message : 'Rewards读取失败'); });
+    void browserClient.command('rewards.get', {}).then(next => { if (active) { accept(next); setEndpoint(next.endpoint); setCountry(next.country ?? ''); setSolanaRpcUrl(next.solanaRpcUrl ?? ''); } }).catch(problem => { if (active) setError(problem instanceof Error ? problem.message : 'Rewards读取失败'); });
     return () => { active = false; release(); };
   }, []);
 
@@ -43,16 +45,18 @@ export function RewardsPanel() {
         <label>所在国家或地区代码<input maxLength={2} value={country} placeholder="例如 US" onChange={event => setCountry(event.target.value.toUpperCase())} disabled={Boolean(state.paymentId)} /></label>
         {!state.paymentId && <button disabled={pending || !state.endpoint || !/^[A-Z]{2}$/.test(country)} onClick={() => setConfirmOpen(true)}>注册Rewards钱包</button>}
         {state.paymentId && <button disabled={pending} onClick={() => void run(() => browserClient.command('rewards.refresh', {}))}>刷新账户状态</button>}
-        {['registering', 'refreshing'].includes(state.status) && <button onClick={() => void browserClient.command('rewards.cancel', {}).then(setState).catch(() => undefined)}>取消请求</button>}
+        {state.paymentId && !state.linked && <button disabled={pending || !state.selfCustodyAvailable} onClick={() => setConnectOpen(true)}>连接自托管收款账户</button>}
+        {(['registering', 'refreshing'].includes(state.status) || state.account.status === 'pending') && <button onClick={() => void browserClient.command('rewards.cancel', {}).then(setState).catch(() => undefined)}>取消请求或等待</button>}
       </section>
       <details className="rewards-configuration"><summary>服务接入配置</summary>
         <p>使用已获准接入的服务地址和凭据。填写配置不代表官方服务已接受此客户端。</p>
         <form onSubmit={event => { event.preventDefault(); void run(async () => {
-          const next = await browserClient.command('rewards.configure', { endpoint, serviceKey: serviceKey || undefined });
+          const next = await browserClient.command('rewards.configure', { endpoint, serviceKey: serviceKey || undefined, solanaRpcUrl: solanaRpcUrl || undefined });
           setServiceKey(''); return next;
         }); }}>
           <label>Rewards grant 服务地址<input type="url" value={endpoint} onChange={event => setEndpoint(event.target.value)} required placeholder="https://" /></label>
           <label>服务密钥<input type="password" autoComplete="off" value={serviceKey} onChange={event => setServiceKey(event.target.value)} placeholder={state.hasServiceKey ? '已保存，留空保持不变' : '凭据不进入页面状态'} /></label>
+          <label>Solana RPC（用于查询自托管BAT余额）<input type="url" value={solanaRpcUrl} onChange={event => setSolanaRpcUrl(event.target.value)} placeholder="https://" /></label>
           <button disabled={pending}>保存配置</button>
         </form>
       </details>
@@ -65,6 +69,12 @@ export function RewardsPanel() {
       <p>注册后真实余额、广告资格与结算仍取决于服务和收款账户。</p>
       <footer><button disabled={pending} onClick={() => setConfirmOpen(false)}>取消</button>
         <button disabled={pending} onClick={() => { setConfirmOpen(false); void run(() => browserClient.command('rewards.register', { geoCountry: country, confirmed: true })); }}>确认注册</button></footer>
+    </Modal>
+    <Modal open={connectOpen} title="连接Solana自托管收款账户？" className="rewards-confirm" onOpenChange={setConnectOpen}>
+      <p>将向Rewards服务申请一次性挑战，并打开官方连接页面。账户只有在服务确认后才显示已连接。</p>
+      <footer><button onClick={() => setConnectOpen(false)}>取消</button><button onClick={() => {
+        setConnectOpen(false); void run(() => browserClient.command('rewards.connectSelfCustody', { confirmed: true }));
+      }}>打开官方连接页面</button></footer>
     </Modal>
   </section>;
 }

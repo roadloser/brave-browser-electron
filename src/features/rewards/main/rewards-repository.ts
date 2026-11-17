@@ -1,7 +1,10 @@
 import type { RewardsState } from '../../../shared/contracts/rewards';
 import type { Migration, ProfileDatabase } from '../../../shared/runtime-ports';
 
-export type RewardsStored = RewardsState & { serviceKeyCipher: string | null; seedCipher: string | null };
+export type RewardsStored = RewardsState & {
+  serviceKeyCipher: string | null; seedCipher: string | null; providerId?: string | null;
+  availableSelfCustody?: Record<string, boolean>;
+};
 export const rewardsMigrations: readonly Migration[] = [{
   id: 'rewards.initial', version: 1,
   up(database) { database.exec('CREATE TABLE rewards_state(id INTEGER PRIMARY KEY CHECK(id=1),record TEXT NOT NULL)'); },

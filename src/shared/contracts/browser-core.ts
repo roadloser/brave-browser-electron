@@ -7,7 +7,7 @@ export const rectangleSchema = z.object({
   width: z.number().finite().min(0), height: z.number().finite().min(0),
 });
 export type Rectangle = z.infer<typeof rectangleSchema>;
-export type BrowserContext = { profileId: string; contextId: string; isPrivate: boolean };
+export type BrowserContext = { profileId: string; contextId: string; isPrivate: boolean; kind?: 'regular' | 'private' | 'tor' };
 export type ProfileSnapshot = { id: string; name: string; isDefault: boolean };
 export type TabSnapshot = BrowserContext & {
   id: string; windowId: string; url: string; title: string; faviconUrl?: string;

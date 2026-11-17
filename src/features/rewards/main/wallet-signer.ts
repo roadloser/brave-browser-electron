@@ -14,6 +14,10 @@ export class NodeRewardsSigner implements RewardsSignerPort {
     return this.withKey(recoverySeed, key => createPublicKey(key).export({ type: 'spki', format: 'der' }).subarray(-32).toString('hex').toUpperCase());
   }
 
+  signMessage(recoverySeed: Uint8Array, message: string): string {
+    return this.withKey(recoverySeed, key => sign(null, Buffer.from(message), key).toString('base64'));
+  }
+
   headers(seed: Uint8Array, keyId: string, method: string, path: string, content: string): Record<string, string> {
     if (!/^[a-zA-Z0-9-]{1,128}$/.test(keyId)) throw new BrowserError('INVALID_ARGUMENT', 'Rewards签名标识无效');
     const digest = `SHA-256=${createHash('sha256').update(content).digest('base64')}`;

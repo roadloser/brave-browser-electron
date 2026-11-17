@@ -1,4 +1,4 @@
-import { HDNodeWallet, JsonRpcProvider, getAddress, formatUnits, parseUnits, type TransactionRequest } from 'ethers';
+import { HDNodeWallet, JsonRpcProvider, getAddress, formatUnits, parseUnits, keccak256, type TransactionRequest } from 'ethers';
 import type { WalletAccount, WalletNetwork } from '../../../../shared/contracts/wallet';
 import { BrowserError } from '../../../../shared/errors';
 import type { ChainAdapterPort, KeyMaterial, PreparedTransfer, SignedTransfer, TransferIntent } from './adapter';
@@ -31,7 +31,8 @@ export class EthereumAdapter implements ChainAdapterPort {
     } finally { provider.destroy(); }
   }
   async sign(key: KeyMaterial, _network: WalletNetwork, prepared: PreparedTransfer): Promise<SignedTransfer> {
-    return { payload: await this.wallet(key).signTransaction(prepared.payload as TransactionRequest) };
+    const payload = await this.wallet(key).signTransaction(prepared.payload as TransactionRequest);
+    return { payload, hash: keccak256(payload) };
   }
   async signMessage(key: KeyMaterial, _network: WalletNetwork, message: string) { return this.wallet(key).signMessage(message); }
   async signBytes(key: KeyMaterial, _network: WalletNetwork, message: Uint8Array) { return this.wallet(key).signMessage(message); }

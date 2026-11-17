@@ -2,6 +2,7 @@ import { Connection, Keypair, PublicKey, SystemProgram, Transaction, VersionedTr
 import { mnemonicToSeedSync } from '@scure/bip39';
 import { derivePath } from 'ed25519-hd-key';
 import nacl from 'tweetnacl';
+import { base58 } from '@scure/base';
 import type { WalletAccount, WalletNetwork } from '../../../../shared/contracts/wallet';
 import { BrowserError } from '../../../../shared/errors';
 import { amountToBase, formatAmount } from './network-client';
@@ -41,11 +42,11 @@ export class SolanaAdapter implements ChainAdapterPort {
       if (data.versioned) {
         const transaction = VersionedTransaction.deserialize(Buffer.from(data.transaction, 'base64'));
         transaction.sign([pair]);
-        return { payload: Buffer.from(transaction.serialize()).toString('base64') };
+        return { payload: Buffer.from(transaction.serialize()).toString('base64'), hash: base58.encode(transaction.signatures[0]) };
       }
       const transaction = Transaction.from(Buffer.from(data.transaction, 'base64'));
       transaction.sign(pair);
-      return { payload: transaction.serialize().toString('base64') };
+      return { payload: transaction.serialize().toString('base64'), hash: transaction.signature ? base58.encode(transaction.signature) : undefined };
     } finally { pair.secretKey.fill(0); }
   }
   async signMessage(key: KeyMaterial, _network: WalletNetwork, message: string) {

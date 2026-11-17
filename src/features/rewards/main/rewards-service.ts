@@ -1,17 +1,35 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import type { RewardsState } from '../../../shared/contracts/rewards';
 import type { BrowserContext } from '../../../shared/contracts/browser-core';
-import type { FeatureRuntime } from '../../../shared/module-lifecycle';
+import type { CommandContext, FeatureRuntime } from '../../../shared/module-lifecycle';
 import { BrowserError } from '../../../shared/errors';
 import { BraveRewardsProvider } from './brave-provider';
 import { NodeRewardsSigner } from './wallet-signer';
 import { RewardsRepository, type RewardsStored } from './rewards-repository';
 import type { RewardsProviderPort } from './provider-port';
+import { SelfCustodyController } from './self-custody-controller';
+import { SolanaBatBalanceAdapter } from './solana-balance-adapter';
 
 export class RewardsService {
   private readonly running = new Map<string, { controller: AbortController; id: string }>();
   private disposed = false;
-  constructor(private readonly runtime: FeatureRuntime, private readonly provider: RewardsProviderPort = new BraveRewardsProvider(new NodeRewardsSigner())) {}
+  private readonly selfCustody;
+  private readonly balanceProvider = new SolanaBatBalanceAdapter();
+  constructor(private readonly runtime: FeatureRuntime, private readonly provider: RewardsProviderPort = new BraveRewardsProvider(new NodeRewardsSigner())) {
+    this.selfCustody = new SelfCustodyController(runtime, provider, profileId => this.repository(profileId).get(),
+      (profileId, status) => {
+        const stored = this.repository(profileId).get();
+        this.save(profileId, { ...stored, provider: status.provider?.name ?? null, providerId: status.provider?.id ?? null,
+          linked: status.linked, availableSelfCustody: status.selfCustodyAvailable,
+          selfCustodyAvailable: Boolean(status.selfCustodyAvailable.solana),
+          account: { status: status.linked ? 'connected' : 'pending', provider: status.provider?.name },
+        });
+      },
+      (profileId, message) => {
+        const stored = this.repository(profileId).get();
+        this.save(profileId, { ...stored, account: { ...stored.account, status: stored.linked ? 'connected' : 'unconnected', message }, error: message });
+      });
+  }
 
   start(): void {
     for (const profile of this.runtime.core.getProfiles()) {
@@ -25,7 +43,7 @@ export class RewardsService {
 
   get(context: BrowserContext): RewardsState { this.regular(context); return this.publicState(this.repository(context.profileId).get()); }
 
-  configure(context: BrowserContext, endpoint: string, serviceKey?: string): RewardsState {
+  configure(context: BrowserContext, endpoint: string, serviceKey?: string, solanaRpcUrl?: string): RewardsState {
     this.regular(context);
     if (this.running.has(context.profileId)) throw new BrowserError('CONFLICT', '请先取消正在进行的Rewards请求');
     const url = new URL(endpoint);
@@ -35,9 +53,14 @@ export class RewardsService {
     const stored = repository.get();
     if (stored.paymentId && stored.endpoint && new URL(stored.endpoint).origin !== url.origin) throw new BrowserError('CONFLICT', '已注册钱包不能直接更换服务来源，请保留原资料');
     const serviceKeyCipher = serviceKey === undefined ? stored.serviceKeyCipher : serviceKey ? this.runtime.secrets.encrypt(serviceKey) : null;
+    if (solanaRpcUrl) {
+      const rpc = new URL(solanaRpcUrl);
+      if (rpc.protocol !== 'https:' || rpc.username || rpc.password) throw new BrowserError('INVALID_ARGUMENT', 'Solana RPC必须是有效HTTPS地址');
+    }
     return this.save(context.profileId, {
       ...stored, endpoint: url.origin, serviceKeyCipher, hasServiceKey: Boolean(serviceKeyCipher),
       status: stored.paymentId ? 'registered' : 'ready', error: undefined,
+      solanaRpcUrl: solanaRpcUrl ?? stored.solanaRpcUrl,
     });
   }
 
@@ -65,9 +88,15 @@ export class RewardsService {
     if (!stored.paymentId) throw new BrowserError('INVALID_ARGUMENT', '尚未注册Rewards钱包');
     return this.perform(context.profileId, 'refreshing', async (record, seed, signal) => {
       const result = await this.provider.wallet(this.configuration(record), seed, record.paymentId!, signal);
+      let balance = record.balance;
+      if (result.linked && result.provider?.name === 'solana' && record.solanaRpcUrl) {
+        const amount = await this.balanceProvider.fetch(record.solanaRpcUrl, result.provider.id, signal);
+        balance = { amount, currency: 'BAT', status: 'confirmed', updatedAt: Date.now() };
+      } else balance = { amount: null, currency: 'BAT', status: 'unknown', updatedAt: null };
       return {
         ...record, status: 'registered', provider: result.provider?.name ?? null, linked: result.linked,
-        selfCustodyAvailable: Object.values(result.selfCustodyAvailable).some(Boolean),
+        providerId: result.provider?.id ?? null, availableSelfCustody: result.selfCustodyAvailable,
+        selfCustodyAvailable: Boolean(result.selfCustodyAvailable.solana), balance,
         account: { status: result.linked ? 'connected' : 'unconnected', provider: result.provider?.name },
         error: undefined,
       };
@@ -76,15 +105,29 @@ export class RewardsService {
 
   cancel(context: BrowserContext): RewardsState {
     this.regular(context);
+    this.selfCustody.cancel(context.profileId);
     this.running.get(context.profileId)?.controller.abort();
     const current = this.repository(context.profileId).get();
     if (this.running.has(context.profileId)) return this.save(context.profileId, {
       ...current, status: 'cancelled', error: '请求已取消；已发出的注册请求仍可能被服务处理，钱包种子已保留',
     });
-    return this.publicState(current);
+    return current.account.status === 'pending'
+      ? this.save(context.profileId, { ...current, account: { ...current.account, status: 'unconnected', message: '收款连接等待已取消' } })
+      : this.publicState(current);
   }
 
-  dispose(): void { this.disposed = true; for (const operation of this.running.values()) operation.controller.abort(); this.running.clear(); }
+  async connectSelfCustody(context: CommandContext): Promise<RewardsState> {
+    this.regular(context);
+    if (this.running.has(context.profileId)) throw new BrowserError('CONFLICT', '请先等待当前Rewards请求结束');
+    const stored = this.repository(context.profileId).get();
+    if (!stored.seedCipher) throw new BrowserError('UNAVAILABLE', 'Rewards钱包尚未注册');
+    const seed = Buffer.from(this.runtime.secrets.decrypt(stored.seedCipher), 'hex');
+    try { await this.selfCustody.connect(context, seed); }
+    finally { seed.fill(0); }
+    return this.save(context.profileId, { ...stored, account: { status: 'pending', provider: 'solana', message: '请在官方连接页面完成操作；等待服务确认' }, error: undefined });
+  }
+
+  dispose(): void { this.disposed = true; this.selfCustody.dispose(); for (const operation of this.running.values()) operation.controller.abort(); this.running.clear(); }
 
   private async perform(profileId: string, status: 'registering' | 'refreshing',
     operation: (record: RewardsStored, seed: Uint8Array, signal: AbortSignal) => Promise<RewardsStored>): Promise<RewardsState> {
@@ -119,7 +162,7 @@ export class RewardsService {
   private repository(profileId: string) { return new RewardsRepository(this.runtime.storage.open(profileId)); }
   private regular(context: BrowserContext): void { if (context.isPrivate) throw new BrowserError('FORBIDDEN', 'Rewards账户管理仅在普通窗口中提供'); }
   private publicState(stored: RewardsStored): RewardsState {
-    const { serviceKeyCipher, seedCipher, ...state } = stored;
+    const { serviceKeyCipher, seedCipher, providerId, availableSelfCustody, ...state } = stored;
     return state;
   }
   private save(profileId: string, stored: RewardsStored): RewardsState {

@@ -65,8 +65,20 @@ export class PolkadotAdapter implements ChainAdapterPort {
       const pending = await api.rpc.author.pendingExtrinsics();
       if (pending.some((extrinsic) => extrinsic.hash.toHex() === hash)) return 'pending' as const;
       const head = await api.rpc.chain.getFinalizedHead();
-      const block = await api.rpc.chain.getBlock(head);
-      return block.block.extrinsics.some((extrinsic) => extrinsic.hash.toHex() === hash) ? 'confirmed' as const : 'unknown' as const;
+      const header = await api.rpc.chain.getHeader(head);
+      const height = header.number.toNumber();
+      for (let offset = 0; offset < 64 && height >= offset; offset++) {
+        const blockHash = offset === 0 ? head : await api.rpc.chain.getBlockHash(height - offset);
+        const block = await api.rpc.chain.getBlock(blockHash);
+        const index = block.block.extrinsics.findIndex((extrinsic) => extrinsic.hash.toHex() === hash);
+        if (index < 0) continue;
+        const historical = await api.at(blockHash);
+        const events = await historical.query.system.events();
+        const scoped = [...events].filter((entry) => entry.phase.isApplyExtrinsic && entry.phase.asApplyExtrinsic.toNumber() === index);
+        if (scoped.some((entry) => entry.event.section === 'system' && entry.event.method === 'ExtrinsicFailed')) return 'failed' as const;
+        return scoped.some((entry) => entry.event.section === 'system' && entry.event.method === 'ExtrinsicSuccess') ? 'confirmed' as const : 'unknown' as const;
+      }
+      return 'unknown' as const;
     } finally { await api.disconnect(); }
   }
   dispose() {}

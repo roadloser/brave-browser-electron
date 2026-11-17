@@ -63,6 +63,8 @@ export interface BrowserCorePort {
   onEvent(listener: (event: CoreEvent) => void): Dispose;
   registerBeforeNavigate(id: string, prepare: (tab: TabSnapshot) => Promise<void>): Dispose;
   openWindow(options?: { profileId?: string; isPrivate?: boolean }): Promise<WindowSnapshot>;
+  openTorWindow(profileId: string, prepare: (context: BrowserContext, browserSession: Session) => Promise<void>): Promise<WindowSnapshot>;
+  closeContext(contextId: string): Promise<void>;
   openFile(windowId: string): Promise<TabSnapshot | null>;
   createProfile(name: string): ProfileSnapshot;
   renameProfile(profileId: string, name: string): ProfileSnapshot;

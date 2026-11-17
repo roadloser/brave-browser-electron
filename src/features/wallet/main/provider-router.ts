@@ -17,6 +17,7 @@ export class ProviderRouter {
   private readonly tabsByContents = new Map<number, string>();
   private readonly preloads = new Map<Session, string>();
   private readonly release: () => void;
+  private readonly releaseWallet: () => void;
   constructor(private readonly runtime: FeatureRuntime, private readonly wallet: WalletService) {
     this.release = runtime.core.onEvent((event) => {
       if (event.type === 'sessionCreated') this.installSession(runtime.core.sessionForContext(event.context));
@@ -37,12 +38,22 @@ export class ProviderRouter {
       }
     });
     for (const context of runtime.core.getContexts()) this.installSession(runtime.core.sessionForContext(context));
+    this.releaseWallet = wallet.onChanged(() => this.publishAccounts());
     ipcMain.handle(channel, async (event, raw: unknown) => {
       try {
         const payload = providerSchema.parse(raw);
         if (JSON.stringify(payload).length > 200000) throw new BrowserError('INVALID_ARGUMENT', '钱包请求过大');
         const { context, origin, tabId, navigationId } = this.sender(event);
-        const value = await this.request(context, origin, tabId, payload);
+        const frame = event.senderFrame;
+        const sourceIsCurrent = () => {
+          try {
+            return !frame.isDestroyed() && !event.sender.isDestroyed() &&
+              event.sender.mainFrame.framesInSubtree.includes(frame) &&
+              new URL(frame.url).origin === origin &&
+              runtime.core.getTab(tabId).navigationId === navigationId;
+          } catch { return false; }
+        };
+        const value = await this.request(context, origin, tabId, payload, sourceIsCurrent);
         const current = runtime.core.getTab(tabId);
         if (current.navigationId !== navigationId || event.senderFrame.isDestroyed() || new URL(event.senderFrame.url).origin !== origin) {
           throw new BrowserError('CANCELLED', '页面已改变，钱包响应已取消');
@@ -56,13 +67,35 @@ export class ProviderRouter {
     });
   }
   dispose() {
-    ipcMain.removeHandler(channel); this.release();
+    ipcMain.removeHandler(channel); this.release(); this.releaseWallet();
     for (const [session, id] of this.preloads) session.unregisterPreloadScript(id);
     this.preloads.clear(); this.tabsByContents.clear();
   }
   private installSession(session: Session) {
     if (this.preloads.has(session)) return;
     this.preloads.set(session, session.registerPreloadScript({ type: 'frame', filePath: this.runtime.assets.walletPreloadPath }));
+  }
+  private publishAccounts() {
+    for (const tabId of this.tabsByContents.values()) {
+      try {
+        const tab = this.runtime.core.getTab(tabId);
+        if (!this.wallet.store.exists(tab)) continue;
+        const context = { ...tab, windowId: tab.windowId, requestId: '' };
+        const session = this.wallet.store.get(context);
+        for (const frame of this.runtime.core.getTabWebContents(tabId).mainFrame.framesInSubtree) {
+          const origin = new URL(frame.url).origin;
+          if (!/^https?:\/\//.test(origin)) continue;
+          const allowed = session.document.grants[origin] ?? [];
+          const accounts = session.keyring.unlocked ? session.document.accounts.filter((account) => allowed.includes(account.id)) : [];
+          const selected = accounts.find((account) => account.id === session.document.selectedAccountId) ?? accounts[0];
+          frame.send('brave:wallet-provider-state', {
+            ethereumAccounts: accounts.filter((account) => account.chain === 'ethereum').map((account) => account.address),
+            chainId: session.document.networks.find((network) => network.id === selected?.networkId)?.chainId ?? '0x1',
+            solanaPublicKey: accounts.find((account) => account.chain === 'solana')?.address ?? null,
+          });
+        }
+      } catch {}
+    }
   }
   private sender(event: IpcMainInvokeEvent) {
     const tabId = this.tabsByContents.get(event.sender.id);
@@ -73,7 +106,7 @@ export class ProviderRouter {
     const tab = this.runtime.core.getTab(tabId);
     return { origin, tabId, navigationId: tab.navigationId, context: { profileId: tab.profileId, contextId: tab.contextId, isPrivate: tab.isPrivate, windowId: tab.windowId, requestId: crypto.randomUUID() } };
   }
-  private async request(context: CommandContext, origin: string, tabId: string, input: z.infer<typeof providerSchema>): Promise<unknown> {
+  private async request(context: CommandContext, origin: string, tabId: string, input: z.infer<typeof providerSchema>, sourceIsCurrent: () => boolean): Promise<unknown> {
     const session = this.wallet.store.get(context);
     const accounts = session.document.accounts.filter((account) => account.chain === input.chain);
     const account = accounts.find((entry) => entry.id === session.document.selectedAccountId) ?? accounts[0];
@@ -88,6 +121,7 @@ export class ProviderRouter {
     if (input.method === 'eth_requestAccounts' || input.method === 'connect') {
       if (!allowed.includes(account.id)) {
         const id = this.wallet.transactions.connect(context, account.id, origin, tabId);
+        this.wallet.transactions.bindSource(id, sourceIsCurrent);
         await this.wallet.waitForApproval(context, id);
       }
       return input.chain === 'ethereum' ? [account.address] : { publicKey: account.address };
@@ -106,18 +140,20 @@ export class ProviderRouter {
         message = Buffer.from(input.params[0], 'base64');
       }
       const id = this.wallet.transactions.messageBytes(context, account.id, message, source);
+      this.wallet.transactions.bindSource(id, () => sourceIsCurrent() && Boolean(this.wallet.store.get(context).document.grants[origin]?.includes(account.id)));
       const signature = await this.wallet.waitForApproval(context, id);
       return input.chain === 'ethereum' ? signature : { signature, publicKey: account.address };
     }
     if (input.chain === 'ethereum' && input.method === 'eth_sendTransaction') {
-      const transaction = input.params[0] as { from?: string; to?: string; value?: string; data?: string } | undefined;
-      if (!transaction?.to || transaction.from?.toLowerCase() !== account.address.toLowerCase()) throw new BrowserError('FORBIDDEN', '交易账户与授权不一致');
-      if (transaction.data && transaction.data !== '0x') throw new BrowserError('UNAVAILABLE', '合约交易需要可解释交易预览，当前不隐瞒调用数据后签名');
-      const base = BigInt(transaction.value ?? '0x0');
-      const factor = 10n ** BigInt(network.decimals);
-      const value = `${base / factor}.${(base % factor).toString().padStart(network.decimals, '0')}`;
-      const id = await this.wallet.store.serial(context, () => this.wallet.transactions.transfer(context, account.id, transaction.to!, value, source));
+      const id = await this.wallet.store.serial(context, () => this.wallet.transactions.dapp(context, account.id, input.params[0], source));
+      this.wallet.transactions.bindSource(id, () => sourceIsCurrent() && Boolean(this.wallet.store.get(context).document.grants[origin]?.includes(account.id)));
       return this.wallet.waitForApproval(context, id);
+    }
+    if (input.chain === 'solana' && ['signTransaction', 'signAndSendTransaction'].includes(input.method)) {
+      const id = await this.wallet.store.serial(context, () => this.wallet.transactions.dapp(context, account.id, input.params[0], source, input.method === 'signTransaction'));
+      this.wallet.transactions.bindSource(id, () => sourceIsCurrent() && Boolean(this.wallet.store.get(context).document.grants[origin]?.includes(account.id)));
+      const result = await this.wallet.waitForApproval(context, id);
+      return input.method === 'signTransaction' ? { transaction: result } : { signature: result };
     }
     if (input.chain === 'ethereum' && ethereumReadMethods.has(input.method)) return rpc(network.rpcUrl, input.method, input.params);
     throw new BrowserError('UNAVAILABLE', `尚未映射此站点钱包方法：${input.method}`);

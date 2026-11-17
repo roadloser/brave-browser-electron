@@ -20,6 +20,7 @@ export function authorizeSender(
   return {
     requestId, windowId: window.id, profileId: window.profileId,
     contextId: window.contextId, isPrivate: window.isPrivate,
+    kind: window.kind,
   };
 }
 

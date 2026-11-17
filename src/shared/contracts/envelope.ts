@@ -18,6 +18,7 @@ import { contentServicesCommandSchemas, type ContentServicesCommandResults, type
 import { walletCommandSchemas, type WalletCommandResults, type WalletState } from './wallet';
 import { rewardsCommandSchemas, type RewardsCommandResults, type RewardsState } from './rewards';
 import { browserActionCommandSchemas, type BrowserActionCommandResults, type FindResult } from './browser-actions';
+import { torCommandSchemas, type TorCommandResults, type TorState } from './tor';
 import type { WireError } from '../errors';
 
 export const WIRE_VERSION = 1;
@@ -35,6 +36,7 @@ export const commandSchemas = {
   ...walletCommandSchemas,
   ...rewardsCommandSchemas,
   ...browserActionCommandSchemas,
+  ...torCommandSchemas,
 };
 export type CommandName = keyof typeof commandSchemas;
 export type CommandInput<Name extends CommandName> = z.input<(typeof commandSchemas)[Name]>;
@@ -43,7 +45,7 @@ export type CommandResults = BrowserCommandResults & TabGroupCommandResults & Bo
   & SettingsCommandResults & DownloadsCommandResults & SiteSettingsCommandResults
   & CredentialsCommandResults & PageToolsCommandResults & NewTabCommandResults
   & LeoCommandResults & ExtensionsCommandResults & ShieldsCommandResults & SyncCommandResults & PrivacyCommandResults
-  & ContentServicesCommandResults & WalletCommandResults & RewardsCommandResults & BrowserActionCommandResults;
+  & ContentServicesCommandResults & WalletCommandResults & RewardsCommandResults & BrowserActionCommandResults & TorCommandResults;
 export type CommandEnvelope = {
   version: typeof WIRE_VERSION; requestId: string; command: CommandName; payload: unknown;
 };
@@ -69,6 +71,7 @@ export interface BrowserEvents {
   'privacy.changed': PrivacyState;
   'news.changed': NewsState;
   'wallet.changed': WalletState;
+  'tor.changed': TorState;
   'rewards.changed': RewardsState;
   'app.error': WireError;
 }

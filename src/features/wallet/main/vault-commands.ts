@@ -21,11 +21,13 @@ export class VaultCommands {
       title: '选择包含英语助记词的文本文件', properties: ['openFile'], filters: [{ name: '文本文件', extensions: ['txt'] }],
     });
     if (choice.canceled || !choice.filePaths[0]) return;
+    if (!this.store.exists(context)) throw new BrowserError('CANCELLED', '资料上下文已关闭');
     const path = choice.filePaths[0];
     if ((await stat(path)).size > 4096) throw new BrowserError('INVALID_ARGUMENT', '助记词文件过大');
     const buffer = await readFile(path);
     try {
       const vault = await session.keyring.create(password, buffer.toString('utf8'));
+      if (!this.store.exists(context)) { session.keyring.dispose(); throw new BrowserError('CANCELLED', '资料上下文已关闭'); }
       try { this.store.update(context, (document) => { document.vault = vault; }); }
       catch (error) { session.keyring.lock(); throw error; }
     } finally { buffer.fill(0); }
