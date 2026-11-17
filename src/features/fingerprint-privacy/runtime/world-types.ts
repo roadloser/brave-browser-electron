@@ -1,10 +1,6 @@
 import type { PrivacyMode } from '../../../shared/contracts/fingerprint-privacy';
 export type WorldPrivacyPolicy = {
   mode: PrivacyMode; token: { high: string; low: string } | null; scope: string | null;
-  hardwareConcurrency?: number;
-  webglBalanced?: boolean;
-  screenFingerprinting?: boolean;
+  hardwareConcurrency?: number; webglBalanced?: boolean; screenFingerprinting?: boolean; pageZoom?: number;
 };
-export type WorldInstallResult = {
-  installed: boolean; coveredApis: string[]; failures: string[]; algorithmRevision: string;
-};
+export type WorldInstallResult = { installed: boolean; coveredApis: string[]; failures: string[]; algorithmRevision: string };
