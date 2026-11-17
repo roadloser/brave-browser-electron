@@ -11,14 +11,14 @@ import type { WorldInstallResult, WorldPrivacyPolicy } from './world-types';
 import type { RuntimeOutcome, RuntimeOutcomeUpdate } from './runtime-outcome';
 import type { UserAgentPort } from '../../../shared/user-agent-port';
 import { NativeUserAgentController } from './native-user-agent-controller';
-import { RuntimeDeadline, assertRuntimeActive } from './runtime-deadline';
+import { assertRuntimeActive } from './runtime-deadline';
+import { ChildTargetRuntime } from './child-target-runtime';
 
 type ExecutionContext = { id: number; origin: string; auxData?: { frameId?: string; isDefault?: boolean; type?: string } };
 
 export class CdpPrivacyContextAdapter {
   private debugger!: DebuggerLease;
   private readonly contexts = new Map<string, ExecutionContext>();
-  private readonly childKinds = new Map<string, ExecutionContextKind>();
   private readonly releases: (() => void)[] = [];
   private readonly initializing = new Set<string>();
   private rootFrameId = '';
@@ -28,6 +28,7 @@ export class CdpPrivacyContextAdapter {
   private pauses?: BootstrapPauseController;
   private controllers!: WorldControllerHost;
   private userAgent!: NativeUserAgentController;
+  private children!: ChildTargetRuntime;
 
   constructor(private readonly tab: TabSnapshot, private readonly debuggerHost: DebuggerHostPort, private readonly userAgentPort: UserAgentPort,
     private readonly policy: (scope: PrivacyPolicyScope, kind: ExecutionContextKind) => WorldPrivacyPolicy,
@@ -39,6 +40,13 @@ export class CdpPrivacyContextAdapter {
     this.debugger = await this.debuggerHost.acquire(this.tab.id, 'fingerprint-privacy');
     this.controllers = new WorldControllerHost(this.debugger);
     this.userAgent = new NativeUserAgentController(this.userAgentPort, this.debugger);
+    this.children = new ChildTargetRuntime({
+      lease: this.debugger, userAgent: this.userAgent, source: this.worldSource,
+      bootstrapSource: () => this.pauses!.source(), rootOrigin: () => this.rootOrigin,
+      disposed: () => this.disposed, policy: this.policy,
+      register: (identity, objectId, sessionId) => this.controllerReport(identity, objectId, sessionId),
+      record: (identity, outcome) => this.record(identity, outcome),
+    });
     const version = await this.debugger.send<{ protocolVersion: string; product: string }>('Browser.getVersion');
     if (version.protocolVersion !== '1.3' || !/150\.0\.7871\./.test(version.product)) {
       throw new BrowserError('UNAVAILABLE', '指纹CDP映射仅针对Electron43.7.5的Chromium150.0.7871版本，当前版本需重新取证');
@@ -51,7 +59,7 @@ export class CdpPrivacyContextAdapter {
           applied: false, firstRead: 'failed', reason: error instanceof Error ? error.message : '首读屏障失败' }));
     this.releases.push(this.debugger.onMessage((method, parameters, sessionId) => {
       void this.message(method, parameters, sessionId).catch(error => {
-        this.record(`${sessionId ?? 'root'}:runtime-failure`, { context: sessionId ? this.childKinds.get(sessionId) ?? 'dedicated-worker' : 'iframe', applied: false, reason: error instanceof Error ? error.message : '运行时映射失败' });
+        this.record(`${sessionId ?? 'root'}:runtime-failure`, { context: sessionId ? this.children.kinds.get(sessionId) ?? 'dedicated-worker' : 'iframe', applied: false, reason: error instanceof Error ? error.message : '运行时映射失败' });
       });
     }));
     await this.debugger.send('Page.enable');
@@ -74,15 +82,15 @@ export class CdpPrivacyContextAdapter {
     if (!this.debugger) return;
     this.controllers?.dispose();
     this.releases.reverse().forEach(release => release());
-    const resume = [...this.childKinds.keys()].map(sessionId => this.debugger.send('Runtime.runIfWaitingForDebugger', {}, sessionId).catch(() => undefined));
-    void Promise.allSettled(resume).then(async () => {
+    void this.children?.resumeAll().then(async () => {
       await this.pauses?.dispose();
+      await this.children?.removeFrameScripts();
+      await this.userAgent?.dispose().catch(error => this.coverage({ type: 'invalidate', reason: error instanceof Error ? error.message : '原生UA恢复失败' }));
       await this.debugger.send('Target.setAutoAttach', { autoAttach: false, waitForDebuggerOnStart: false, flatten: true }).catch(() => undefined);
       if (this.scriptId) await this.debugger.send('Page.removeScriptToEvaluateOnNewDocument', { identifier: this.scriptId }).catch(() => undefined);
       await this.debugger.send('Debugger.disable').catch(() => undefined);
-      await this.userAgent?.dispose().catch(error => this.coverage({ type: 'invalidate', reason: error instanceof Error ? error.message : '原生UA恢复失败' }));
     }).finally(() => this.debugger.dispose());
-    this.contexts.clear(); this.childKinds.clear();
+    this.contexts.clear(); this.children?.clear();
   }
 
   async updateZoom(factor: number): Promise<void> {
@@ -116,68 +124,11 @@ export class CdpPrivacyContextAdapter {
       this.coverage({ type: 'remove-session', sessionId });
       for (const key of this.contexts.keys()) if (key.startsWith(`${sessionId ?? 'root'}:`)) this.contexts.delete(key);
     } else if (method === 'Target.attachedToTarget') {
-      const childSession = typeof parameters.sessionId === 'string' ? parameters.sessionId : undefined;
-      const target = parameters.targetInfo as { type?: string } | undefined;
-      if (!childSession) return;
-      const kind: ExecutionContextKind = target?.type === 'service_worker' ? 'service-worker' : target?.type === 'shared_worker' ? 'shared-worker' : target?.type === 'iframe' ? 'iframe' : target?.type === 'worklet' ? 'worklet' : 'dedicated-worker';
-      this.childKinds.set(childSession, kind);
-      const deadline = new RuntimeDeadline(5000, () => {
-        void this.debugger.send('Runtime.runIfWaitingForDebugger', {}, childSession).catch(() => undefined);
-        this.record(`${childSession}:target`, { context: kind, applied: false, firstRead: 'failed', reason: '子目标初始化超过5秒，已恢复；不能声称首读受保护' });
-      });
-      try {
-        if (kind !== 'worklet') await this.userAgent.apply(childSession);
-        assertRuntimeActive(deadline.signal, this.disposed);
-        await this.debugger.send('Runtime.enable', {}, childSession);
-        await this.debugger.send('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: true, flatten: true }, childSession);
-        if (kind === 'iframe') {
-          await this.debugger.send('Debugger.enable', {}, childSession);
-          await this.debugger.send('Page.enable', {}, childSession);
-          await this.debugger.send('Page.addScriptToEvaluateOnNewDocument', { source: this.pauses!.source() }, childSession);
-          assertRuntimeActive(deadline.signal, this.disposed);
-          return;
-        }
-        if (kind === 'worklet') {
-          if (!this.rootOrigin) {
-            this.record(`${childSession}:target`, { context: kind, applied: false, firstRead: 'failed', reason: 'threaded Worklet未取得创建者顶层真实origin，拒绝以module URL替代' });
-            return;
-          }
-          const policy = this.policy(resolvePolicyScope({ origin: this.rootOrigin, topLevelSite: this.rootOrigin, nonce: null }, kind, this.rootOrigin), kind);
-          assertRuntimeActive(deadline.signal, this.disposed);
-          const result = await this.debugger.send<{ result?: { objectId?: string } }>('Runtime.evaluate', {
-            expression: cdpWorldSource(this.worldSource, policy), returnByValue: false,
-          }, childSession);
-          const installed = await this.controllerReport(`${childSession}:target`, result.result?.objectId, childSession);
-          assertRuntimeActive(deadline.signal, this.disposed);
-          this.record(`${childSession}:target`, { context: kind, applied: installed.installed, coveredApis: installed.coveredApis,
-            failures: installed.failures, firstRead: 'prepared',
-            reason: '按Brave继承创建者top-frame策略且off-main不加nonce；仅Paint严格hit-test暴露项，未运行对照' });
-          return;
-        }
-        const scope = await this.debugger.send<{ storageKey: string }>('Storage.getStorageKey', {}, childSession);
-        assertRuntimeActive(deadline.signal, this.disposed);
-        const parsed = parsePrivacyStorageKey(scope.storageKey);
-        if (!parsed) {
-          this.record(`${childSession}:target`, { context: kind, applied: false, reason: '目标未提供可映射的真实StorageKey' });
-        } else {
-          const policy = this.policy(resolvePolicyScope(parsed, kind, this.rootOrigin), kind);
-          const result = await this.debugger.send<{ result?: { objectId?: string } }>('Runtime.evaluate', {
-            expression: cdpWorldSource(this.worldSource, policy), returnByValue: false, awaitPromise: false,
-          }, childSession);
-          const installed = await this.controllerReport(`${childSession}:target`, result.result?.objectId, childSession);
-          assertRuntimeActive(deadline.signal, this.disposed);
-          this.record(`${childSession}:target`, { context: kind, applied: Boolean(installed?.installed), coveredApis: installed?.coveredApis, failures: installed?.failures, firstRead: 'prepared',
-            reason: installed?.installed ? '已在目标恢复前安装固定算法bundle，未进行行为对照' : '目标无对应API或策略关闭' });
-        }
-      } finally {
-        deadline.dispose();
-        await this.debugger.send('Runtime.runIfWaitingForDebugger', {}, childSession).catch(() => undefined);
-      }
+      await this.children.attached(parameters);
     } else if (method === 'Target.detachedFromTarget' && typeof parameters.sessionId === 'string') {
       this.controllers.releaseSession(parameters.sessionId);
       this.coverage({ type: 'remove-session', sessionId: parameters.sessionId });
-      this.childKinds.delete(parameters.sessionId);
-      this.userAgent.forget(parameters.sessionId);
+      this.children.detached(parameters.sessionId);
     } else if (method === 'Page.frameNavigated' && !sessionId) {
       const frame = parameters.frame as { id?: string; parentId?: string; url?: string; securityOrigin?: string } | undefined;
       if (frame?.id && !frame.parentId) {
