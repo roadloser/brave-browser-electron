@@ -9,11 +9,19 @@ export const modelConfigurationSchema = z.object({
   supportsVision: z.boolean(), supportsTools: z.boolean(),
 });
 export type ModelConfiguration = z.infer<typeof modelConfigurationSchema> & { hasKey: boolean };
-export type LeoMessage = { id: string; role: 'user' | 'assistant'; content: string; createdAt: number; status: 'completed' | 'streaming' | 'cancelled' | 'failed' };
+export type LeoAttachment = { id: string; name: string; mimeType: 'image/png' | 'image/jpeg' | 'image/webp'; dataUrl: string; size: number };
+export type LeoToolUse = {
+  id: string; name: 'user_choice_tool' | 'assistant_detail_storage'; input: Record<string, unknown>;
+  status: 'pending' | 'completed' | 'rejected'; output?: string;
+};
+export type LeoMessage = {
+  id: string; role: 'user' | 'assistant'; content: string; createdAt: number;
+  status: 'completed' | 'streaming' | 'cancelled' | 'failed'; attachments?: LeoAttachment[]; toolUses?: LeoToolUse[];
+};
 export type LeoConversation = { id: string; title: string; modelId: string; messages: LeoMessage[]; updatedAt: number };
 export type LeoState = {
   models: ModelConfiguration[]; conversations: LeoConversation[];
-  activeRequests: { id: string; conversationId: string; status: 'running' | 'cancelled' | 'failed'; error?: string }[];
+  activeRequests: { id: string; conversationId: string; status: 'running' | 'waiting-for-user' | 'cancelled' | 'failed'; error?: string }[];
   official: { status: 'unconfigured' | 'configured' | 'unauthorized' | 'unavailable'; reason?: string };
   revision: number;
 };
@@ -24,13 +32,19 @@ export const leoCommandSchemas = {
   'leo.removeModel': z.object({ id: idSchema }),
   'leo.grantContent': z.object({ tabId: idSchema, scope: z.enum(['article', 'selection']), confirmed: z.literal(true) }),
   'leo.revokeContent': z.object({ grantId: idSchema }),
-  'leo.send': z.object({ conversationId: idSchema.optional(), modelId: idSchema, text: z.string().trim().min(1).max(100000), grantId: idSchema.optional() }),
+  'leo.chooseImages': z.object({}),
+  'leo.removeAttachment': z.object({ id: idSchema }),
+  'leo.respondTool': z.object({ requestId: idSchema, toolUseId: idSchema, choice: z.string().max(10000), reject: z.boolean().default(false) }),
+  'leo.send': z.object({ conversationId: idSchema.optional(), modelId: idSchema, text: z.string().trim().max(100000), grantId: idSchema.optional(), attachmentIds: z.array(idSchema).max(8).optional() }).refine(input => input.text.length > 0 || Boolean(input.attachmentIds?.length), '需要消息或图片'),
   'leo.cancel': z.object({ requestId: idSchema }),
   'leo.removeConversation': z.object({ id: idSchema }),
   'leo.clearConversations': z.object({}),
 };
 export interface LeoCommandResults {
   'leo.get': LeoState;
+  'leo.chooseImages': LeoAttachment[];
+  'leo.removeAttachment': void;
+  'leo.respondTool': void;
   'leo.saveModel': LeoState;
   'leo.removeModel': LeoState;
   'leo.grantContent': ContentGrant;

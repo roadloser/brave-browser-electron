@@ -3,21 +3,23 @@ import type { LeoMessage } from '../../../shared/contracts/leo';
 import type { ProviderPort, ProviderRequest } from './providers/provider';
 import { ProviderFailure } from './providers/provider';
 import type { LeoStateStore } from './state-store';
+import { ToolLoop } from './tools/tool-loop';
 
 export type ActiveRequest = {
   id: string; conversationId: string; modelId: string; assistantId: string;
-  context: CommandContext; controller: AbortController; status: 'running' | 'cancelled' | 'failed'; error?: string;
+  context: CommandContext; controller: AbortController; status: 'running' | 'waiting-for-user' | 'cancelled' | 'failed'; error?: string;
   source?: { tabId: string; navigationId: string };
 };
 
 export class RequestRunner {
+  readonly tools: ToolLoop;
   readonly requests = new Map<string, ActiveRequest>();
   private readonly running = new Set<Promise<void>>();
   constructor(
     private readonly store: LeoStateStore,
     private readonly publish: (context: CommandContext) => void,
     private readonly invalidateKey: (context: CommandContext, modelId: string) => void,
-  ) {}
+  ) { this.tools = new ToolLoop(store, publish); }
 
   launch(active: ActiveRequest, provider: ProviderPort, request: Omit<ProviderRequest, 'signal' | 'onText'>) {
     this.requests.set(active.id, active);
@@ -28,11 +30,12 @@ export class RequestRunner {
 
   cancel(id: string) {
     const request = this.requests.get(id);
-    if (request?.status === 'running') request.controller.abort();
+    if (request && ['running', 'waiting-for-user'].includes(request.status)) request.controller.abort();
   }
 
   async dispose() {
     for (const request of this.requests.values()) request.controller.abort();
+    this.tools.dispose();
     await Promise.allSettled(this.running);
     this.requests.clear();
   }
@@ -51,12 +54,15 @@ export class RequestRunner {
         const message = conversation?.messages.find((entry) => entry.id === active.assistantId);
         if (!message || !conversation) return;
         message.content += fragment; message.status = status; conversation.updatedAt = Date.now();
+        if (status === 'cancelled' || status === 'failed') for (const tool of message.toolUses ?? []) if (tool.status === 'pending') {
+          tool.status = 'rejected'; tool.output = status === 'cancelled' ? '请求已取消' : '请求失败，工具未继续执行';
+        }
       });
       this.publish(active.context);
     };
     const timeout = setTimeout(() => active.controller.abort(), 5 * 60 * 1000);
     try {
-      await provider.send({
+      await this.tools.execute(active, provider, {
         ...request, signal: active.controller.signal,
         onText: (text) => {
           if (active.controller.signal.aborted) return;

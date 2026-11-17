@@ -15,7 +15,12 @@ export class LeoStateStore {
     const document: LeoDocument = context.isPrivate ? { models: persisted.models, conversations: [], revision: persisted.revision } : persisted;
     let changed = false;
     document.conversations.forEach((conversation) => conversation.messages.forEach((message) => {
-      if (message.status === 'streaming') { message.status = 'failed'; changed = true; }
+      if (message.status === 'streaming') {
+        message.status = 'failed'; changed = true;
+        for (const tool of message.toolUses ?? []) if (tool.status === 'pending') {
+          tool.status = 'rejected'; tool.output = '应用已重启，请重新发起请求';
+        }
+      }
     }));
     if (changed && !context.isPrivate) {
       document.revision++;

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { FileText, Plus, Send, Settings2, Square, Trash2, X } from 'lucide-react';
+import { FileText, ImagePlus, Plus, Send, Settings2, Square, Trash2, X } from 'lucide-react';
 import type { TabSnapshot } from '../../../shared/contracts/browser-core';
-import type { ContentGrant, ModelConfiguration } from '../../../shared/contracts/leo';
+import type { ContentGrant, LeoAttachment, ModelConfiguration } from '../../../shared/contracts/leo';
 import { browserClient } from '../../../renderer/client/browser-client';
 import { DockedPanel } from '../../../renderer/components/docked-panel';
 import { ErrorNotice } from '../../../renderer/components/error-notice';
@@ -9,6 +9,8 @@ import { IconButton } from '../../../renderer/components/icon-button';
 import { useLeo } from './conversation-store';
 import { ModelEditor } from './model-editor';
 import { ContentGrantDialog } from './content-grant';
+import { ToolResult } from './tool-result';
+import { AttachmentTray } from './attachment-tray';
 import './leo.css';
 
 export function LeoPanel({ tab, open, onOpenChange }: { tab: TabSnapshot; open: boolean; onOpenChange: (open: boolean) => void }) {
@@ -21,12 +23,13 @@ export function LeoPanel({ tab, open, onOpenChange }: { tab: TabSnapshot; open: 
   const [editingModel, setEditingModel] = useState<ModelConfiguration | null>(null);
   const [grantOpen, setGrantOpen] = useState(false);
   const [grant, setGrant] = useState<ContentGrant | null>(null);
+  const [attachments, setAttachments] = useState<LeoAttachment[]>([]);
   const tail = useRef<HTMLDivElement>(null);
   const conversation = state?.conversations.find((entry) => entry.id === conversationId);
-  const active = state?.activeRequests.find((entry) => entry.conversationId === conversationId && entry.status === 'running');
+  const active = state?.activeRequests.find((entry) => entry.conversationId === conversationId && ['running', 'waiting-for-user'].includes(entry.status));
   const failed = state?.activeRequests.find((entry) => entry.conversationId === conversationId && entry.status === 'failed');
   useEffect(() => {
-    setConversationId(null); setModelId(''); setGrant(null); setInput('');
+    setConversationId(null); setModelId(''); setGrant(null); setInput(''); setAttachments([]);
   }, [tab.contextId]);
   useEffect(() => {
     if (state?.models.length && !state.models.some((model) => model.id === modelId)) setModelId(state.models[0].id);
@@ -39,13 +42,13 @@ export function LeoPanel({ tab, open, onOpenChange }: { tab: TabSnapshot; open: 
   }, [grant, tab.id, tab.navigationId]);
   useEffect(() => { tail.current?.scrollIntoView({ block: 'end' }); }, [conversation?.messages]);
   async function send() {
-    if (!input.trim() || !modelId || active || sending) return;
+    if ((!input.trim() && !attachments.length) || !modelId || active || sending) return;
     setSending(true); setError('');
     try {
       const result = await browserClient.command('leo.send', {
-        conversationId: conversationId ?? undefined, modelId, text: input.trim(), grantId: grant?.id,
+        conversationId: conversationId ?? undefined, modelId, text: input.trim(), grantId: grant?.id, attachmentIds: attachments.map((attachment) => attachment.id),
       });
-      setConversationId(result.conversationId); setInput(''); setGrant(null);
+      setConversationId(result.conversationId); setInput(''); setGrant(null); setAttachments([]);
     } catch (failure) { setError(failure instanceof Error ? failure.message : String(failure)); setGrant(null); }
     finally { setSending(false); }
   }
@@ -77,6 +80,8 @@ export function LeoPanel({ tab, open, onOpenChange }: { tab: TabSnapshot; open: 
             {conversation?.messages.map((message) => <div key={message.id} className={`leo-message role-${message.role}`}>
               <span className="leo-message-role">{message.role === 'user' ? '您' : 'Leo'}</span>
               <div>{message.content || (message.status === 'streaming' ? '正在思考…' : '')}</div>
+              {message.attachments && <AttachmentTray attachments={message.attachments} />}
+              {message.toolUses?.map((tool) => <ToolResult key={tool.id} tool={tool} requestId={active?.id} onChoice={setInput} onError={setError} />)}
               {message.status === 'cancelled' && <small>已停止生成</small>}
               {message.status === 'failed' && <small>此回答未完成</small>}
             </div>)}
@@ -84,6 +89,10 @@ export function LeoPanel({ tab, open, onOpenChange }: { tab: TabSnapshot; open: 
           </div>
           {(error || failed?.error) && <ErrorNotice message={error || failed?.error || ''} onDismiss={() => setError('')} />}
           <form className="leo-composer" onSubmit={(event) => { event.preventDefault(); void send(); }}>
+            <AttachmentTray attachments={attachments} onRemove={(id) => {
+              browserClient.command('leo.removeAttachment', { id }).catch((failure) => setError(String(failure)));
+              setAttachments((current) => current.filter((attachment) => attachment.id !== id));
+            }} />
             {grant && <div className="leo-grant"><FileText size={14} /><span>{grant.title}</span><IconButton label="撤销页面授权" onClick={() => {
               browserClient.command('leo.revokeContent', { grantId: grant.id }).catch((failure) => setError(String(failure))); setGrant(null);
             }}><X size={13} /></IconButton></div>}
@@ -91,9 +100,17 @@ export function LeoPanel({ tab, open, onOpenChange }: { tab: TabSnapshot; open: 
               onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); } }} />
             <div className="leo-composer-actions">
               <IconButton label="授权当前页面内容" disabled={!/^https?:/.test(tab.url) || Boolean(active)} onClick={() => setGrantOpen(true)}><FileText size={17} /></IconButton>
+              <IconButton label="添加图片" disabled={Boolean(active) || !state?.models.find((model) => model.id === modelId)?.supportsVision}
+                onClick={() => browserClient.command('leo.chooseImages', {}).then((images) => {
+                  if (attachments.length + images.length > 8) {
+                    images.forEach((image) => browserClient.command('leo.removeAttachment', { id: image.id }).catch(() => undefined));
+                    setError('一次最多发送 8 张图片'); return;
+                  }
+                  setAttachments((current) => [...current, ...images]);
+                }).catch((failure) => setError(String(failure)))}><ImagePlus size={17} /></IconButton>
               <span>{tab.isPrivate ? '私密对话不保存' : '页面内容需要单次授权'}</span>
               {active ? <IconButton label="停止生成" onClick={() => browserClient.command('leo.cancel', { requestId: active.id }).catch((failure) => setError(String(failure)))}><Square size={16} /></IconButton> :
-                <IconButton label="发送" type="submit" disabled={sending || !input.trim() || !modelId}><Send size={17} /></IconButton>}
+                <IconButton label="发送" type="submit" disabled={sending || (!input.trim() && !attachments.length) || !modelId}><Send size={17} /></IconButton>}
             </div>
           </form>
         </div>

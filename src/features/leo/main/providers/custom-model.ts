@@ -1,4 +1,3 @@
-import { net } from 'electron';
 import { ProviderFailure, type ProviderPort, type ProviderRequest } from './provider';
 import { readModelResponse } from './openai-response';
 
@@ -12,16 +11,16 @@ export class CustomModelProvider implements ProviderPort {
     if (endpoint.protocol !== 'https:' && !(endpoint.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(endpoint.hostname))) {
       throw new ProviderFailure('capability', '远程模型需要 HTTPS；本机模型可使用 HTTP');
     }
-    const response = await net.fetch(endpoint.href, {
+    const response = await request.fetch(endpoint.href, {
       method: 'POST', signal: request.signal, redirect: 'error', credentials: 'omit',
       headers: {
         'Content-Type': 'application/json',
         ...(request.apiKey ? { Authorization: `Bearer ${request.apiKey}` } : {}),
         Accept: request.model.stream ? 'text/event-stream' : 'application/json',
       },
-      body: JSON.stringify({ model: request.model.model, messages: request.messages, stream: request.model.stream }),
+      body: JSON.stringify({ model: request.model.model, messages: request.messages, stream: request.model.stream, tools: request.tools }),
     });
-    await readModelResponse(response, request.model.stream, request.onText, request.signal);
+    return readModelResponse(response, request.model.stream, request.onText, request.signal);
   }
   dispose() {}
 }

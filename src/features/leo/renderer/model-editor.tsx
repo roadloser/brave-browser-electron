@@ -14,6 +14,8 @@ export function ModelEditor({ model, open, onOpenChange, onSaved }: {
   const [apiKey, setApiKey] = useState('');
   const [stream, setStream] = useState(true);
   const [contextWindow, setContextWindow] = useState(32768);
+  const [supportsVision, setSupportsVision] = useState(false);
+  const [supportsTools, setSupportsTools] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -21,6 +23,7 @@ export function ModelEditor({ model, open, onOpenChange, onSaved }: {
     setName(model?.name ?? ''); setEndpoint(model?.endpoint ?? '');
     setModelName(model?.model ?? ''); setProvider(model?.provider ?? 'custom');
     setStream(model?.stream ?? true); setContextWindow(model?.contextWindow ?? 32768);
+    setSupportsVision(model?.supportsVision ?? false); setSupportsTools(model?.supportsTools ?? false);
     setApiKey(''); setError('');
   }, [model, open]);
   async function save() {
@@ -28,7 +31,7 @@ export function ModelEditor({ model, open, onOpenChange, onSaved }: {
     try {
       const state = await browserClient.command('leo.saveModel', {
         id: model?.id ?? crypto.randomUUID(), name, endpoint, model: modelName, provider, stream, contextWindow,
-        supportsTools: model?.supportsTools ?? false, supportsVision: model?.supportsVision ?? false,
+        supportsTools, supportsVision,
         ...(apiKey ? { apiKey } : {}),
       });
       setApiKey(''); onSaved(state); onOpenChange(false);
@@ -46,6 +49,8 @@ export function ModelEditor({ model, open, onOpenChange, onSaved }: {
           <p className="leo-detail">官方服务需要单独授权的服务凭据和签名密钥；普通 API 密钥不能替代。</p>}
         <label className="form-field"><span>上下文容量</span><input type="number" min={1024} max={2000000} value={contextWindow} onChange={(event) => setContextWindow(Number(event.target.value))} /></label>
         <label className="leo-checkbox"><input type="checkbox" checked={stream} onChange={(event) => setStream(event.target.checked)} />流式回复</label>
+        <label className="leo-checkbox"><input type="checkbox" checked={supportsVision} onChange={(event) => setSupportsVision(event.target.checked)} />模型支持图片输入</label>
+        <label className="leo-checkbox"><input type="checkbox" checked={supportsTools} onChange={(event) => setSupportsTools(event.target.checked)} />模型支持工具调用</label>
         {error && <ErrorNotice message={error} />}
         <div className="form-actions">
           {model && <button type="button" className="button button-danger" disabled={busy} onClick={async () => {

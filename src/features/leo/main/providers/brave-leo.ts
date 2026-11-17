@@ -1,5 +1,4 @@
 import { createHash, createHmac } from 'node:crypto';
-import { net } from 'electron';
 import { ProviderFailure, type ProviderPort, type ProviderRequest } from './provider';
 import { readModelResponse } from './openai-response';
 
@@ -20,7 +19,7 @@ export class BraveLeoProvider implements ProviderPort {
     }
     const payload = JSON.stringify({
       messages: request.messages, brave_capability: [], model: request.model.model,
-      system_language: 'zh_CN', stream: request.model.stream,
+      system_language: 'zh_CN', stream: request.model.stream, tools: request.tools,
     });
     const digest = `SHA-256=${createHash('sha256').update(payload).digest('base64')}`;
     const keyId = process.env.BRAVE_LEO_KEY_ID!;
@@ -29,7 +28,7 @@ export class BraveLeoProvider implements ProviderPort {
     const premium = endpoint.hostname.startsWith('ai-chat-premium.');
     const premiumCredential = process.env.BRAVE_LEO_PREMIUM_CREDENTIAL;
     if (premium && !premiumCredential) throw new ProviderFailure('credentials', '此官方模型需要有效的 Leo Premium 凭据');
-    const response = await net.fetch(endpoint.href, {
+    const response = await request.fetch(endpoint.href, {
       method: 'POST', signal: request.signal, redirect: 'error', credentials: 'omit',
       headers: {
         'Content-Type': 'application/json', 'x-brave-key': process.env.BRAVE_LEO_SERVICE_KEY!,
@@ -39,7 +38,7 @@ export class BraveLeoProvider implements ProviderPort {
       },
       body: payload,
     });
-    await readModelResponse(response, request.model.stream, request.onText, request.signal);
+    return readModelResponse(response, request.model.stream, request.onText, request.signal);
   }
   dispose() {}
 }
