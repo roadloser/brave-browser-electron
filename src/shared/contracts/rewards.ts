@@ -31,6 +31,7 @@ export type RewardsState = {
     provider: RewardsProviderName; status: 'authorizing' | 'preparing' | 'claiming' | 'connected' | 'unknown' | 'failed' | 'signed-out';
     displayName?: string; address?: string; error?: string; balance: string | null; balanceAt: number | null;
   };
+  captcha?: { id: string; url: string; failures: number; paused: boolean };
   capabilities: { operation: string; status: 'implemented' | 'blocked' | 'unknown'; reason?: string }[];
   lastRequestId: string | null; error?: string; revision: number;
 };
@@ -56,6 +57,9 @@ export const rewardsCommandSchemas = {
   'rewards.signOutExternal': z.object({ confirmed: z.literal(true) }),
   'rewards.adsHistory': z.object({}),
   'rewards.reactToAd': z.object({ placementId: z.string().uuid(), action: z.enum(['like', 'dislike', 'flag']) }),
+  'rewards.openCaptcha': z.object({}),
+  'rewards.captchaResult': z.object({ id: z.string().min(1).max(256), success: z.boolean() }),
+  'rewards.snoozeCaptcha': z.object({}),
 };
 export interface RewardsCommandResults {
   'rewards.get': RewardsState;
@@ -76,4 +80,7 @@ export interface RewardsCommandResults {
   'rewards.signOutExternal': RewardsState;
   'rewards.adsHistory': RewardsAdHistoryItem[];
   'rewards.reactToAd': RewardsAdHistoryItem[];
+  'rewards.openCaptcha': RewardsState;
+  'rewards.captchaResult': RewardsState;
+  'rewards.snoozeCaptcha': RewardsState;
 }
