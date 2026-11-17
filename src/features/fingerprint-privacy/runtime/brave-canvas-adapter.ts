@@ -1,7 +1,9 @@
 import type { CanvasFarblingBridge } from './canvas-protocol';
+import { CanvasContextRegistry } from './canvas-context-registry';
+import { createCanvasExportAdapter } from './canvas-export-adapter';
 
-export function installBraveCanvasPolicy(bridge: CanvasFarblingBridge): { installed: boolean; coveredApis: string[] } {
-  if (!bridge || typeof bridge.pixels !== 'function') return { installed: false, coveredApis: [] };
+export function installBraveCanvasPolicy(bridge: CanvasFarblingBridge): { installed: boolean; coveredApis: string[]; failures: string[] } {
+  if (!bridge || typeof bridge.pixels !== 'function') return { installed: false, coveredApis: [], failures: ['像素算法映射不可用'] };
   const release: (() => void)[] = [];
   const coveredApis: string[] = [];
   const htmlPrototype = typeof HTMLCanvasElement === 'undefined' ? null : HTMLCanvasElement.prototype;
@@ -10,6 +12,10 @@ export function installBraveCanvasPolicy(bridge: CanvasFarblingBridge): { instal
   const offscreenContextPrototype = typeof OffscreenCanvasRenderingContext2D === 'undefined' ? null : OffscreenCanvasRenderingContext2D.prototype;
   const originalImageData = contextPrototype?.getImageData;
   const originalOffscreenImageData = offscreenContextPrototype?.getImageData;
+  const contexts = new CanvasContextRegistry();
+  const registered = contexts.start();
+  release.push(registered.dispose);
+  const failures = [...registered.failures];
 
   function farble(image: ImageData): ImageData {
     const bytes = new Uint8Array(image.data.buffer, image.data.byteOffset, image.data.byteLength);
@@ -25,33 +31,14 @@ export function installBraveCanvasPolicy(bridge: CanvasFarblingBridge): { instal
   function patch(prototype: object | null, name: string, replacement: (original: (...args: unknown[]) => unknown) => (...args: unknown[]) => unknown): void {
     if (!prototype) return;
     const descriptor = Object.getOwnPropertyDescriptor(prototype, name);
-    if (!descriptor?.configurable || typeof descriptor.value !== 'function') return;
+    if (!descriptor?.configurable || typeof descriptor.value !== 'function') { failures.push(`Canvas.${name}: descriptor不可改写`); return; }
     const value = replacement(descriptor.value as (...args: unknown[]) => unknown);
     Object.defineProperty(prototype, name, { ...descriptor, value });
     release.push(() => Object.defineProperty(prototype, name, descriptor));
     coveredApis.push(name);
   }
 
-  function cloneHtml(canvas: HTMLCanvasElement): HTMLCanvasElement {
-    const clone = canvas.ownerDocument.createElement('canvas');
-    clone.width = canvas.width; clone.height = canvas.height;
-    const context = clone.getContext('2d');
-    if (!context || !originalImageData) throw new DOMException('无法读取画布像素', 'NotSupportedError');
-    context.drawImage(canvas, 0, 0);
-    const image = originalImageData.call(context, 0, 0, clone.width, clone.height);
-    context.putImageData(farble(image), 0, 0);
-    return clone;
-  }
-
-  function cloneOffscreen(canvas: OffscreenCanvas): OffscreenCanvas {
-    const clone = new OffscreenCanvas(canvas.width, canvas.height);
-    const context = clone.getContext('2d');
-    if (!context || !originalOffscreenImageData) throw new DOMException('无法读取离屏画布像素', 'NotSupportedError');
-    context.drawImage(canvas, 0, 0);
-    const image = originalOffscreenImageData.call(context, 0, 0, clone.width, clone.height);
-    context.putImageData(farble(image), 0, 0);
-    return clone;
-  }
+  const exports = createCanvasExportAdapter(contexts, farble, originalImageData, originalOffscreenImageData);
 
   try {
     for (const prototype of [contextPrototype, offscreenContextPrototype]) patch(prototype, 'getImageData', original => function(this: unknown, ...args) {
@@ -59,20 +46,21 @@ export function installBraveCanvasPolicy(bridge: CanvasFarblingBridge): { instal
     });
     patch(htmlPrototype, 'toDataURL', original => function(this: HTMLCanvasElement, ...args) {
       if (!this.width || !this.height) return Reflect.apply(original, this, args);
-      return Reflect.apply(original, cloneHtml(this), args);
+      return Reflect.apply(original, exports.html(this), args);
     });
     patch(htmlPrototype, 'toBlob', original => function(this: HTMLCanvasElement, ...args) {
       if (!this.width || !this.height) return Reflect.apply(original, this, args);
-      return Reflect.apply(original, cloneHtml(this), args);
+      return Reflect.apply(original, exports.html(this), args);
     });
     patch(offscreenPrototype, 'convertToBlob', original => function(this: OffscreenCanvas, ...args) {
       if (!this.width || !this.height) return Reflect.apply(original, this, args);
-      try { return Reflect.apply(original, cloneOffscreen(this), args); }
+      try { return Reflect.apply(original, exports.offscreen(this), args); }
       catch (error) { return Promise.reject(error); }
     });
-    return { installed: coveredApis.length > 0, coveredApis };
+    failures.push('Canvas导出采用同色域/格式clone；原生SkPixmap预乘alpha、native通道顺序与rowBytes未运行对照');
+    return { installed: coveredApis.length > 0, coveredApis, failures };
   } catch {
     release.reverse().forEach(restore => restore());
-    return { installed: false, coveredApis: [] };
+    return { installed: false, coveredApis: [], failures: [...failures, 'Canvas安装失败，已恢复原API'] };
   }
 }
