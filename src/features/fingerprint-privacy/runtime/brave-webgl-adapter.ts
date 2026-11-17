@@ -1,5 +1,6 @@
 import type { BraveFarblingAlgorithms } from './algorithms/brave-algorithms';
 import type { WorldPrivacyPolicy } from './world-types';
+import { webglStrictParameter } from './brave-webgl-strict-adapter';
 
 const fakeNames = ['texture', 'expanded', 'polygon', 'circle', 'triangle', 'blend', 'draw']
   .flatMap(category => ['sampler', 'compressor', 'blender'].map(suffix => ({
@@ -46,6 +47,7 @@ export function installBraveWebGL(policy: WorldPrivacyPolicy, algorithms: BraveF
       } });
       Object.defineProperty(prototype, 'getParameter', { configurable: true, writable: true, value: function(this: WebGLRenderingContext, name: number) {
         const original = parameter.call(this, name);
+        if (policy.mode === 'maximum' && version === 1 && webglStrictParameter(name)) return null;
         if (name === 0x9245 || name === 0x9246) {
           if (original === null) return original;
           return policy.mode === 'maximum' ? algorithms.randomString(name === 0x9245 ? 'UNMASKED_VENDOR_WEBGL' : 'UNMASKED_RENDERER_WEBGL', 8) : policy.webglBalanced ? 'Brave' : original;

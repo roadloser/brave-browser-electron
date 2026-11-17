@@ -7,6 +7,7 @@ import { installBraveWebGL } from './brave-webgl-adapter';
 import { installBraveScreen } from './brave-screen-adapter';
 import { installBraveAnalyser } from './brave-analyser-adapter';
 import { installBraveHitTests } from './brave-hit-test-adapter';
+import { installBraveStrictWebGL } from './brave-webgl-strict-adapter';
 import type { WorldInstallResult, WorldPrivacyPolicy } from './world-types';
 
 export function install(policy: WorldPrivacyPolicy): WorldInstallResult {
@@ -23,7 +24,8 @@ export function install(policy: WorldPrivacyPolicy): WorldInstallResult {
   const screen = policy.screenFingerprinting ? installBraveScreen(algorithms) : { coveredApis: [], failures: [] };
   const analyser = installBraveAnalyser(policy);
   const hitTests = installBraveHitTests(policy);
-  coveredApis.push(...navigator.coveredApis, ...webgl.coveredApis, ...screen.coveredApis, ...analyser.coveredApis, ...hitTests.coveredApis);
-  failures.push(...navigator.failures, ...webgl.failures, ...screen.failures, ...analyser.failures, ...hitTests.failures);
+  const strictWebgl = installBraveStrictWebGL(policy);
+  coveredApis.push(...navigator.coveredApis, ...webgl.coveredApis, ...screen.coveredApis, ...analyser.coveredApis, ...hitTests.coveredApis, ...strictWebgl.coveredApis);
+  failures.push(...navigator.failures, ...webgl.failures, ...screen.failures, ...analyser.failures, ...hitTests.failures, ...strictWebgl.failures);
   return { installed: coveredApis.length > 0, coveredApis, failures, algorithmRevision: RANDEN_REVISION };
 }

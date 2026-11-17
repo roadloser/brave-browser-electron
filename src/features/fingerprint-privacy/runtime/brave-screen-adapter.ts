@@ -23,20 +23,23 @@ export function installBraveScreen(algorithms: BraveFarblingAlgorithms): { cover
   }
   const topSize = () => {
     try { return [window.top!.innerWidth, window.top!.innerHeight]; }
-    catch { throw new DOMException('当前跨来源frame无法取得Brave屏幕策略所需的顶层视口', 'NotSupportedError'); }
+    catch { return null; }
   };
-  patch(window, 'outerWidth', () => topSize()[0] + offset(1));
-  patch(window, 'outerHeight', () => topSize()[1] + offset(2));
+  patch(window, 'outerWidth', original => { const size = topSize(); return size ? size[0] + offset(1) : original; });
+  patch(window, 'outerHeight', original => { const size = topSize(); return size ? size[1] + offset(2) : original; });
   patch(window, 'screenX', () => offset(3));
   patch(window, 'screenY', () => offset(4));
   patch(window, 'screenLeft', () => offset(3));
   patch(window, 'screenTop', () => offset(4));
   const dimensions = () => {
-    const [width, height] = topSize();
-    return screenSizes.find(size => size[0] >= width + offset(1) && size[1] >= height + offset(2)) ?? screenSizes[screenSizes.length - 1];
+    const size = topSize();
+    const width = size ? size[0] + offset(1) : window.outerWidth;
+    const height = size ? size[1] + offset(2) : window.outerHeight;
+    return screenSizes.find(candidate => candidate[0] >= width && candidate[1] >= height) ?? screenSizes[screenSizes.length - 1];
   };
   patch(screen, 'width', () => dimensions()[0]); patch(screen, 'height', () => dimensions()[1]);
   patch(screen, 'availWidth', () => dimensions()[0]); patch(screen, 'availHeight', () => dimensions()[1]);
   patch(screen, 'availLeft', () => 0); patch(screen, 'availTop', () => 0); patch(screen, 'isExtended', () => false);
+  if (!topSize()) failures.push('跨来源top window不可读，outer尺寸按原getter回退；Blink LocalDOMWindow/RemoteDOMWindow区分尚未完整映射');
   return { coveredApis, failures };
 }
