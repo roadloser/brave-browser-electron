@@ -76,6 +76,8 @@ export class CdpPrivacyContextAdapter {
     });
   }
 
+  available(): boolean { return !this.disposed; }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
