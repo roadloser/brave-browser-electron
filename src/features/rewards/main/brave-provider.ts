@@ -46,7 +46,7 @@ export class BraveRewardsProvider implements RewardsProviderPort {
       ...this.signer.headers(seed, keyId, method, path, content), 'Content-Type': 'application/json',
     };
     if (configuration.serviceKey) headers['x-brave-key'] = configuration.serviceKey;
-    const response = await fetch(url, { method, headers, body: method === 'GET' ? undefined : content, signal, redirect: 'error' });
+    const response = await configuration.fetch(url, { method, headers, body: method === 'GET' ? undefined : content, signal, redirect: 'error' });
     if (response.status === 401 || response.status === 403) throw new BrowserError('FORBIDDEN', 'Rewards服务拒绝资格或签名，请核实服务配置与账户状态', true, { status: response.status });
     if (response.status === 409) throw new BrowserError('CONFLICT', 'Rewards钱包可能已注册；请保留恢复种子并恢复原paymentId，不重复创建', true, { status: response.status });
     if (response.status === 404) throw new BrowserError('NOT_FOUND', 'Rewards服务未找到该paymentId', true, { status: response.status });

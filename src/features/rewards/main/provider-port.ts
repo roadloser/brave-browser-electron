@@ -1,4 +1,6 @@
-export type RewardsProviderConfiguration = { grantEndpoint: string; serviceKey?: string };
+import type { RewardsFetch } from './rewards-network';
+
+export type RewardsProviderConfiguration = { grantEndpoint: string; serviceKey?: string; fetch: RewardsFetch };
 export type RewardsWalletStatus = {
   provider: { name: string; id: string; linkingId: string } | null;
   linked: boolean;

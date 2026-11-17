@@ -13,6 +13,13 @@ export type RewardsState = {
     tokenCount?: number; error?: string;
   };
   settlement: { status: 'unknown' | 'pending' | 'confirmed' | 'failed'; amount?: string; updatedAt?: number };
+  adsDelivery?: {
+    enabled: boolean; maxPerHour: number; catalogStatus: 'empty' | 'refreshing' | 'ready' | 'failed';
+    catalogId?: string; creativeCount: number; lastUpdatedAt: number | null;
+    pendingConfirmations: number; paymentTokenCount: number;
+    confirmationStatus: 'idle' | 'running' | 'failed'; settlementStatus: 'idle' | 'running' | 'confirmed' | 'unknown' | 'failed';
+    reason?: string; error?: string;
+  };
   capabilities: { operation: string; status: 'implemented' | 'blocked' | 'unknown'; reason?: string }[];
   lastRequestId: string | null; error?: string; revision: number;
 };
@@ -28,6 +35,10 @@ export const rewardsCommandSchemas = {
     issuerPublicKeys: z.array(z.string().min(16).max(4096)).min(1).max(128),
   }),
   'rewards.refillConfirmationTokens': z.object({ confirmed: z.literal(true) }),
+  'rewards.configureAdsDelivery': z.object({ enabled: z.boolean(), maxPerHour: z.number().int().min(1).max(10), confirmed: z.literal(true) }),
+  'rewards.refreshAds': z.object({}),
+  'rewards.retryAdsConfirmations': z.object({}),
+  'rewards.redeemPaymentTokens': z.object({ confirmed: z.literal(true) }),
 };
 export interface RewardsCommandResults {
   'rewards.get': RewardsState;
@@ -38,4 +49,8 @@ export interface RewardsCommandResults {
   'rewards.connectSelfCustody': RewardsState;
   'rewards.configureAds': RewardsState;
   'rewards.refillConfirmationTokens': RewardsState;
+  'rewards.configureAdsDelivery': RewardsState;
+  'rewards.refreshAds': RewardsState;
+  'rewards.retryAdsConfirmations': RewardsState;
+  'rewards.redeemPaymentTokens': RewardsState;
 }

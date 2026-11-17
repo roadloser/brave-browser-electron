@@ -2,10 +2,11 @@ import { z } from 'zod';
 import type { SignedTokenBatch } from './crypto-port';
 import type { RewardsSignerPort } from '../provider-port';
 import { BrowserError } from '../../../../shared/errors';
+import type { AdsFetch } from './ads-fetch';
 
 export interface AdsTokenProviderPort {
-  request(endpoint: string, paymentId: string, seed: Uint8Array, blindedTokens: string[], signal: AbortSignal): Promise<string>;
-  fetch(endpoint: string, paymentId: string, nonce: string, signal: AbortSignal): Promise<SignedTokenBatch>;
+  request(endpoint: string, paymentId: string, seed: Uint8Array, blindedTokens: string[], signal: AbortSignal, fetch: AdsFetch): Promise<string>;
+  fetch(endpoint: string, paymentId: string, nonce: string, signal: AbortSignal, fetch: AdsFetch): Promise<SignedTokenBatch>;
 }
 const signedSchema = z.object({
   publicKey: z.string().min(1).max(2048), batchProof: z.string().min(1).max(4096),
@@ -15,7 +16,7 @@ const signedSchema = z.object({
 export class BraveAdsTokenProvider implements AdsTokenProviderPort {
   constructor(private readonly signer: RewardsSignerPort) {}
 
-  async request(endpoint: string, paymentId: string, seed: Uint8Array, blindedTokens: string[], signal: AbortSignal) {
+  async request(endpoint: string, paymentId: string, seed: Uint8Array, blindedTokens: string[], signal: AbortSignal, fetch: AdsFetch) {
     const content = JSON.stringify({ blindedTokens });
     const digest = this.signer.headers(seed, 'primary', 'post', '/', content).digest;
     const signature = this.signer.signMessage(seed, `digest: ${digest}`);
@@ -30,7 +31,7 @@ export class BraveAdsTokenProvider implements AdsTokenProviderPort {
     return result.nonce;
   }
 
-  async fetch(endpoint: string, paymentId: string, nonce: string, signal: AbortSignal): Promise<SignedTokenBatch> {
+  async fetch(endpoint: string, paymentId: string, nonce: string, signal: AbortSignal, fetch: AdsFetch): Promise<SignedTokenBatch> {
     const url = this.url(endpoint, paymentId);
     url.searchParams.set('nonce', nonce);
     const response = await fetch(url, { signal, redirect: 'error' });

@@ -3,6 +3,7 @@ import type { RewardsState } from '../../../shared/contracts/rewards';
 import { browserClient } from '../../../renderer/client/browser-client';
 import { Modal } from '../../../renderer/components/modal';
 import { AdsTokenSettings } from './ads-token-settings';
+import { AdsDeliverySettings } from './ads-delivery-settings';
 import './rewards.css';
 
 export function RewardsPanel() {
@@ -65,6 +66,7 @@ export function RewardsPanel() {
         {state.capabilities.map(capability => <li key={capability.operation}><strong>{capability.operation}</strong><span>{capability.status === 'implemented' ? '客户端已接入，待服务观察' : '尚未完成接入'}</span><p>{capability.reason}</p></li>)}
       </ul></details>
       <AdsTokenSettings state={state} pending={pending} run={run} />
+      <AdsDeliverySettings state={state} pending={pending} run={run} />
     </>}
     <Modal open={confirmOpen} title="创建Rewards钱包？" className="rewards-confirm" onOpenChange={setConfirmOpen}>
       <p>会生成加密保存在本资料中的Rewards钱包身份，并向已配置服务发送国家/地区代码 {country} 与签名注册请求。</p>
