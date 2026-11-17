@@ -17,6 +17,7 @@ import { fingerprintPrivacyFeature } from '../../features/fingerprint-privacy/ma
 import { rewardsFeature } from '../../features/rewards/main';
 import { walletFeature } from '../../features/wallet/main';
 import { torFeature } from '../../features/tor/main';
+import { vpnFeature } from '../../features/vpn/main';
 
 export const featureManifest: readonly FeatureDefinition[] = [
   settingsFeature,
@@ -37,4 +38,5 @@ export const featureManifest: readonly FeatureDefinition[] = [
   rewardsFeature,
   walletFeature,
   torFeature,
+  vpnFeature,
 ];

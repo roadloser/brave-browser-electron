@@ -86,6 +86,9 @@ importers:
       lucide-react:
         specifier: 0.577.0
         version: 0.577.0(react@19.2.8)
+      plist:
+        specifier: 5.1.1
+        version: 5.1.1
       protobufjs:
         specifier: 8.8.1
         version: 8.8.1
@@ -1062,6 +1065,10 @@ packages:
     resolution: {integrity: sha512-/5NV/vDALVFDXgLmfsy9TRCBlKwO2LNBFzpzvb9iIj+jR+eSc6DLYYvVOdivT/jm7MtU6TebYuRmzEOI7w40UA==}
     engines: {node: '>=10.0.0'}
 
+  '@xmldom/xmldom@0.9.12':
+    resolution: {integrity: sha512-5AXjrcMClTryPe9LgZrygpB1lj7s0S9E0+W+AHaVKAVyHanafK86iPSvG5xHVSp/jC+VH1UXu0TAEmY279xH7A==}
+    engines: {node: '>=14.6'}
+
   '@zondax/filecoin-signing-tools@2.4.3':
     resolution: {integrity: sha512-MfVd3t2iP//jcgeF+Mbx8A5UZVaeC5GicE4a9DY/hPQskm78wzCSuNwrJTlvKFgT3aPqWm7vYHGO0bbr21V0iw==}
 
@@ -2031,6 +2038,10 @@ packages:
   plist@3.1.0:
     resolution: {integrity: sha512-uysumyrvkUX0rX/dEVqt8gC3sTBzd4zoWfLeS29nb53imdaXVvLINYXTI2GNqzaMuvacNx4uJQ8+b3zXR0pkgQ==}
     engines: {node: '>=10.4.0'}
+
+  plist@5.1.1:
+    resolution: {integrity: sha512-n55fGiwWNHf6zFdP9qvtr1x7P898lfJ/rbDvB3pYqVRcO+iG3sl5SSkGSLiIoAI9ZZc2F3Ga/5wPtM8EqhgSqA==}
+    engines: {node: '>=18'}
 
   possible-typed-array-names@1.1.0:
     resolution: {integrity: sha512-/+5VFTchJDoVj3bhoqi6UeymcD00DAwb1nJwamzPvHEszJ4FpF6SNNbUbOS8yI56qHzdV8eK0qEfOSiodkTdxg==}
@@ -3674,6 +3685,8 @@ snapshots:
 
   '@xmldom/xmldom@0.8.15': {}
 
+  '@xmldom/xmldom@0.9.12': {}
+
   '@zondax/filecoin-signing-tools@2.4.3':
     dependencies:
       '@ipld/dag-cbor': 8.0.1
@@ -4797,6 +4810,11 @@ snapshots:
     dependencies:
       '@xmldom/xmldom': 0.8.15
       base64-js: 1.5.1
+      xmlbuilder: 15.1.1
+
+  plist@5.1.1:
+    dependencies:
+      '@xmldom/xmldom': 0.9.12
       xmlbuilder: 15.1.1
 
   possible-typed-array-names@1.1.0: {}
