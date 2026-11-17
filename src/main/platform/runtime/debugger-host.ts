@@ -18,6 +18,7 @@ const privacyCommands = new Set([
   'Target.setAutoAttach', 'Target.getTargets', 'Target.attachToTarget', 'Target.detachFromTarget',
   'Storage.getStorageKey', 'Storage.getStorageKeyForFrame',
   'Debugger.enable', 'Debugger.disable', 'Debugger.evaluateOnCallFrame', 'Debugger.resume',
+  'Runtime.callFunctionOn', 'Runtime.releaseObject',
 ]);
 
 export class DebuggerHost implements DebuggerHostPort {
