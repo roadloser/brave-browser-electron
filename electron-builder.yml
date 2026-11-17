@@ -1,0 +1,17 @@
+appId: org.braveelectron.browser
+productName: Brave Electron
+directories:
+  output: release
+files:
+  - dist/**/*
+  - package.json
+asar: true
+asarUnpack:
+  - node_modules/better-sqlite3/prebuilds/**/*
+npmRebuild: false
+mac:
+  category: public.app-category.productivity
+  target:
+    - target: dir
+      arch:
+        - arm64

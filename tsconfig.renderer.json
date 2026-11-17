@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "composite": true,
+    "jsx": "react-jsx",
+    "lib": [
+      "ES2023",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "types": [
+      "vite/client"
+    ]
+  },
+  "include": [
+    "src/renderer/**/*",
+    "src/features/**/renderer/**/*",
+    "src/shared/contracts/**/*",
+    "src/shared/errors.ts"
+  ]
+}

@@ -1,0 +1,42 @@
+import { useState } from 'react';
+import { Menu } from '@base-ui/react/menu';
+import { Bookmark, Download, History, Menu as MenuIcon, Monitor, PanelLeft, Plus, Settings, Undo2, VenetianMask } from 'lucide-react';
+import { IconButton } from '../components/icon-button';
+import { useBrowserCommand } from './use-browser-command';
+import { useBrowserStore } from './browser-store';
+import { usePageOverlay } from './use-page-overlay';
+
+export function BrowserMenu() {
+  const [open, setOpen] = useState(false);
+  const command = useBrowserCommand();
+  const snapshot = useBrowserStore((state) => state.snapshot);
+  const current = snapshot?.windows.find((entry) => entry.id === snapshot.currentWindowId);
+  usePageOverlay(open);
+  const pages = [
+    { url: 'brave://bookmarks', label: '收藏夹', icon: Bookmark },
+    { url: 'brave://history', label: '历史记录', icon: History },
+    { url: 'brave://downloads', label: '下载内容', icon: Download },
+    { url: 'brave://settings', label: '设置', icon: Settings },
+  ];
+  return (
+    <Menu.Root open={open} onOpenChange={setOpen}>
+      <Menu.Trigger render={<IconButton label="主菜单" />}><MenuIcon size={19} /></Menu.Trigger>
+      <Menu.Portal><Menu.Positioner side="bottom" align="end" sideOffset={8}>
+        <Menu.Popup className="browser-menu">
+          <Menu.Item onClick={() => void command('browser.openTab', {})}><Plus size={16} />新建标签页<kbd>⌘T</kbd></Menu.Item>
+          <Menu.Item onClick={() => void command('browser.openWindow', {})}><Monitor size={16} />新建窗口<kbd>⌘N</kbd></Menu.Item>
+          <Menu.Item onClick={() => void command('browser.openWindow', { isPrivate: true })}><VenetianMask size={16} />新建私密窗口<kbd>⇧⌘N</kbd></Menu.Item>
+          <Menu.Item onClick={() => void command('browser.reopenClosedTab', {})}><Undo2 size={16} />重新打开关闭的标签页</Menu.Item>
+          <Menu.Separator className="menu-separator" />
+          {pages.map(({ url, label, icon: Icon }) => (
+            <Menu.Item key={url} onClick={() => void command('browser.openTab', { url })}><Icon size={16} />{label}</Menu.Item>
+          ))}
+          <Menu.Separator className="menu-separator" />
+          <Menu.Item onClick={() => void command('browser.setLayout', { verticalTabs: !current?.layout.verticalTabs })}>
+            <PanelLeft size={16} />{current?.layout.verticalTabs ? '使用横向标签页' : '使用纵向标签页'}
+          </Menu.Item>
+        </Menu.Popup>
+      </Menu.Positioner></Menu.Portal>
+    </Menu.Root>
+  );
+}

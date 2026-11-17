@@ -1,0 +1,38 @@
+.horizontal-tab-list { display: flex; align-items: flex-end; flex: 1; gap: 3px; min-width: 0; overflow: auto hidden; height: 100%; scrollbar-width: none; -webkit-app-region: no-drag; }
+.browser-tab { display: flex; align-items: center; gap: 7px; height: 32px; min-width: 90px; max-width: 230px; flex: 1 1 170px; padding: 0 9px; border-radius: 9px 9px 0 0; border: 0; background: transparent; cursor: default; outline-offset: -3px; position: relative; }
+.browser-tab:hover { background: var(--color-hover); }
+.browser-tab[data-active="true"] { background: var(--color-bg); }
+.browser-tab[data-pinned="true"]:not(.is-vertical) { flex: 0 0 38px; min-width: 38px; width: 38px; justify-content: center; padding: 0; }
+.tab-favicon { display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: 0 0 16px; color: var(--color-muted); }
+.tab-favicon img { width: 16px; height: 16px; object-fit: contain; }
+.tab-title { flex: 1; font-size: 12px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+.tab-action { display: flex; align-items: center; justify-content: center; background: none; width: 18px; height: 18px; border: 0; border-radius: 4px; padding: 0; flex: 0 0 18px; }
+.tab-action:hover { background: var(--color-active); }
+.tab-close { opacity: 0; }
+.browser-tab:hover .tab-close, .browser-tab[data-active="true"] .tab-close, .browser-tab:focus-within .tab-close { opacity: 1; }
+.new-tab-button { margin: 0 3px 1px; flex: 0 0 30px; }
+.vertical-tabs { width: var(--vertical-tabs-width); flex: 0 0 var(--vertical-tabs-width); min-width: 0; border-right: 1px solid var(--color-border); display: flex; flex-direction: column; }
+.vertical-tabs > header { display: flex; align-items: center; justify-content: space-between; padding: 7px 10px; color: var(--color-muted); font-size: 11px; }
+.vertical-tab-list { display: flex; flex-direction: column; gap: 4px; overflow: auto; padding: 2px 7px 12px; }
+.browser-tab.is-vertical { flex: 0 0 34px; width: 100%; max-width: none; min-width: 0; border-radius: 7px; }
+.vertical-tab-list .new-tab-button { margin: 6px 0; width: 100%; justify-content: flex-start; padding-left: 9px; }
+[data-group-color="grey"] { --group-color: #8b8d98; }
+[data-group-color="blue"] { --group-color: #508bdf; }
+[data-group-color="red"] { --group-color: #d75a62; }
+[data-group-color="yellow"] { --group-color: #bd952c; }
+[data-group-color="green"] { --group-color: #49976b; }
+[data-group-color="pink"] { --group-color: #d06ca5; }
+[data-group-color="purple"] { --group-color: #9272ce; }
+[data-group-color="cyan"] { --group-color: #3199ac; }
+[data-group-color="orange"] { --group-color: #d78a48; }
+.browser-tab[data-group-color] { box-shadow: inset 0 -3px var(--group-color); }
+.browser-tab.is-vertical[data-group-color] { box-shadow: inset 3px 0 var(--group-color); }
+.group-header { display: flex; align-items: center; gap: 1px; padding: 0 3px; min-height: 32px; flex: 0 0 auto; }
+.group-header.is-vertical { width: 100%; padding: 3px 2px; }
+.group-toggle { display: flex; gap: 4px; align-items: center; border: none; background: var(--group-color); color: #fff; border-radius: 5px; padding: 3px 6px; min-height: 22px; max-width: 150px; font-size: 11px; }
+.group-toggle span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.group-header .icon-button { width: 21px; height: 23px; }
+.group-dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; flex: 0 0 10px; background: var(--group-color); }
+.group-color-list { display: flex; gap: 9px; flex-wrap: wrap; margin: 12px 0; }
+.group-color-option { background: var(--group-color); width: 24px; height: 24px; border-radius: 50%; border: 2px solid transparent; padding: 0; }
+.group-color-option[aria-pressed="true"] { outline: 2px solid var(--group-color); outline-offset: 2px; border-color: var(--color-surface); }
