@@ -65,21 +65,7 @@ export class TabGroupService {
   close(context: CommandContext, groupId: string) {
     const closing = this.findGroup(context, groupId);
     const state = this.load(context);
-    const previous = structuredClone(state.groups);
-    this.commit(context, (groups) => groups.filter((group) => group.id !== groupId));
-    this.changing = true;
-    try {
-      for (const tabId of closing.tabIds) this.runtime.core.closeTab(tabId);
-    } catch (error) {
-      const window = this.runtime.core.getWindow(context.windowId);
-      const remaining = normalizeGroups(previous, window);
-      this.save(context, remaining);
-      state.groups = remaining;
-      this.publish(context.windowId, state);
-      throw error;
-    } finally {
-      this.changing = false;
-    }
+    for (const tabId of [...closing.tabIds]) this.runtime.core.closeTab(tabId);
     return this.snapshot(state);
   }
 
