@@ -9,6 +9,7 @@ export type ExtensionRecord = {
 export type ExtensionInstallProposal = {
   id: string; name: string; version: string; description: string;
   permissions: string[]; hostPermissions: string[]; replacesId?: string;
+  previousVersion?: string; wasEnabled?: boolean; addedPermissions?: string[]; addedHostPermissions?: string[];
 };
 export type ExtensionsState = {
   extensions: ExtensionRecord[]; revision: number;

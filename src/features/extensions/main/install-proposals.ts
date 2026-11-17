@@ -9,11 +9,13 @@ import { BrowserError } from '../../../shared/errors';
 import { fingerprintDirectory, manifestExtensionId, manifestPermissions, readManifest, type ExtensionManifest } from './manifest';
 import type { StoredExtension } from './extension-repository';
 import type { ExtensionPackageSourcePort } from './library-port';
+import { ExtensionRepository } from './extension-repository';
 
 export type InstallProposal = ExtensionInstallProposal & {
   profileId: string; contextId: string; windowId: string;
   directory: string; cleanupPath: string; hash: string; manifest: ExtensionManifest;
   source: 'directory' | 'web-store'; sourcePath?: string; expectedId?: string; expiresAt: number;
+  previousHash?: string;
 };
 
 export class InstallProposals {
@@ -68,8 +70,8 @@ export class InstallProposals {
   }
 
   publicValue(proposal: InstallProposal): ExtensionInstallProposal {
-    const { id, name, version, description, permissions, hostPermissions, replacesId } = proposal;
-    return { id, name, version, description, permissions, hostPermissions, replacesId };
+    const { id, name, version, description, permissions, hostPermissions, replacesId, previousVersion, wasEnabled, addedPermissions, addedHostPermissions } = proposal;
+    return { id, name, version, description, permissions, hostPermissions, replacesId, previousVersion, wasEnabled, addedPermissions, addedHostPermissions };
   }
 
   async dispose(): Promise<void> {
@@ -83,12 +85,18 @@ export class InstallProposals {
   private async create(context: CommandContext, directory: string, cleanupPath: string, source: Pick<InstallProposal, 'source' | 'sourcePath' | 'expectedId' | 'replacesId'>) {
     const hash = await fingerprintDirectory(directory);
     const manifest = await readManifest(directory);
+    const previous = source.replacesId ? new ExtensionRepository(this.runtime.storage.open(context.profileId)).get(source.replacesId) : undefined;
+    if (source.replacesId && !previous) throw new BrowserError('NOT_FOUND', '更新中的扩展已移除，请重新选择');
+    const required = manifestPermissions(manifest);
     if (source.expectedId && manifestExtensionId(manifest) !== source.expectedId) throw new BrowserError('INVALID_ARGUMENT', '下载扩展的身份与请求不一致');
     const proposal: InstallProposal = {
       id: randomUUID(), profileId: context.profileId, contextId: context.contextId, windowId: context.windowId,
       directory, cleanupPath, hash, manifest, ...source,
       name: manifest.name, version: manifest.version, description: manifest.description ?? '',
-      ...manifestPermissions(manifest), expiresAt: Date.now() + 10 * 60_000,
+      ...required, expiresAt: Date.now() + 10 * 60_000,
+      previousVersion: previous?.version, previousHash: previous?.hash, wasEnabled: previous?.enabled,
+      addedPermissions: previous ? required.permissions.filter(permission => !previous.permissions.includes(permission)) : undefined,
+      addedHostPermissions: previous ? required.hostPermissions.filter(origin => !previous.hostPermissions.includes(origin)) : undefined,
     };
     this.proposals.set(proposal.id, proposal);
     return this.publicValue(proposal);
