@@ -5,5 +5,5 @@ export default defineConfig({
   base: './',
   plugins: [react()],
   server: { host: '127.0.0.1', port: 5173, strictPort: true },
-  build: { target: 'chrome150', outDir: 'dist/renderer', emptyOutDir: true, sourcemap: true },
+  build: { target: 'es2023', outDir: 'dist/renderer', emptyOutDir: true, sourcemap: true },
 });

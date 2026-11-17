@@ -92,6 +92,7 @@ export class TabGroupService {
     const existing = this.windows.get(context.windowId);
     if (existing) return existing;
     const window = this.runtime.core.getWindow(context.windowId);
+    if (!window.ready) throw new BrowserError('UNAVAILABLE', '窗口正在恢复，请稍后操作');
     const persisted = context.isPrivate ? [] : this.repository(context.profileId).list(window.id);
     const groups = normalizeGroups(persisted, window);
     this.revision = Math.max(this.revision, ...groups.map((group) => group.revision), 0);
@@ -174,6 +175,7 @@ export class TabGroupService {
     }
     if (this.changing || event.type !== 'stateChanged') return;
     for (const window of event.state.windows) {
+      if (!window.ready) continue;
       const state = this.windows.get(window.id);
       if (!state) continue;
       const activeChanged = state.activeTabId !== window.activeTabId;

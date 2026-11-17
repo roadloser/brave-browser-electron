@@ -1,4 +1,4 @@
-import type { OnBeforeRequestListenerDetails, Session } from 'electron';
+import type { OnBeforeRequestListenerDetails, OnBeforeSendHeadersListenerDetails, Session } from 'electron';
 import { NetworkPolicyCoordinator } from './request-policy';
 
 export type RequestDecision = { cancel?: boolean; redirectURL?: string };
@@ -22,5 +22,14 @@ export class ElectronRequestHost {
       browserSession.webRequest.onBeforeRequest(null);
       release();
     };
+  }
+
+  attachHeaders(browserSession: Session, policy: (details: OnBeforeSendHeadersListenerDetails) => Record<string, string>): () => void {
+    const release = this.policies.claimNative(browserSession, 'headers');
+    browserSession.webRequest.onBeforeSendHeaders({ urls: ['http://*/*', 'https://*/*'] }, (details, callback) => {
+      try { callback({ requestHeaders: policy(details) }); }
+      catch { callback({ cancel: true }); }
+    });
+    return () => { browserSession.webRequest.onBeforeSendHeaders(null); release(); };
   }
 }

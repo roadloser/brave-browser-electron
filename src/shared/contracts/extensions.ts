@@ -1,0 +1,37 @@
+import { z } from 'zod';
+import { idSchema } from './browser-core';
+
+export type ExtensionRecord = {
+  id: string; name: string; version: string; description: string;
+  enabled: boolean; path: string; permissions: string[]; hostPermissions: string[];
+  status: 'loaded' | 'disabled' | 'failed'; error?: string; hasAction: boolean;
+};
+export type ExtensionInstallProposal = {
+  id: string; name: string; version: string; description: string;
+  permissions: string[]; hostPermissions: string[]; replacesId?: string;
+};
+export type ExtensionsState = {
+  extensions: ExtensionRecord[]; revision: number;
+  networkInterception: 'unavailable-native-shields';
+  privateExtensions: 'unsupported';
+};
+export const extensionsCommandSchemas = {
+  'extensions.get': z.object({}),
+  'extensions.chooseDirectory': z.object({}),
+  'extensions.confirmInstall': z.object({ proposalId: idSchema, approve: z.boolean() }),
+  'extensions.setEnabled': z.object({ id: idSchema, enabled: z.boolean() }),
+  'extensions.remove': z.object({ id: idSchema }),
+  'extensions.reload': z.object({ id: idSchema }),
+  'extensions.openAction': z.object({ id: idSchema, tabId: idSchema }),
+  'extensions.closeAction': z.object({}),
+};
+export interface ExtensionsCommandResults {
+  'extensions.get': ExtensionsState;
+  'extensions.chooseDirectory': ExtensionInstallProposal | null;
+  'extensions.confirmInstall': ExtensionsState;
+  'extensions.setEnabled': ExtensionsState;
+  'extensions.remove': ExtensionsState;
+  'extensions.reload': ExtensionsState;
+  'extensions.openAction': { opened: boolean };
+  'extensions.closeAction': void;
+}

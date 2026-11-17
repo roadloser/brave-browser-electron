@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ArrowLeft, ArrowRight, Bookmark, RotateCw, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, RotateCw, X } from 'lucide-react';
 import type { TabSnapshot } from '../../shared/contracts/browser-core';
 import { IconButton } from '../components/icon-button';
 import { AddressBar } from './address-bar';
@@ -20,10 +20,6 @@ export function Toolbar({ tab, slots }: { tab: TabSnapshot | undefined; slots?: 
         {tab?.loading ? <X size={17} /> : <RotateCw size={17} />}
       </IconButton>
       <AddressBar tab={tab} />
-      <IconButton label="将此页加入收藏" disabled={!tab || tab.url.startsWith('brave:')}
-        onClick={() => tab && void command('bookmarks.addCurrentTab', { tabId: tab.id, parentId: null })}>
-        <Bookmark size={17} />
-      </IconButton>
       {slots}
       <ProfileMenu />
       <BrowserMenu />

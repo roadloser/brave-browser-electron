@@ -26,7 +26,7 @@ export const layoutSchema = z.object({
 });
 export type BrowserLayout = z.infer<typeof layoutSchema>;
 export type WindowSnapshot = BrowserContext & {
-  id: string; tabs: TabSnapshot[]; activeTabId: string | null;
+  id: string; tabs: TabSnapshot[]; activeTabId: string | null; ready: boolean;
   layout: BrowserLayout; maximized: boolean; fullscreen: boolean; revision: number;
 };
 export type BrowserSnapshot = {
@@ -41,6 +41,7 @@ export type NavigationCommitted = BrowserContext & {
 export type CoreEvent =
   | { type: 'stateChanged'; windowId: string; state: BrowserSnapshot }
   | { type: 'shortcut'; windowId: string; action: 'focusAddress' }
+  | { type: 'windowReady'; windowId: string; context: BrowserContext }
   | { type: 'navigationCommitted'; visit: NavigationCommitted }
   | { type: 'tabClosed'; context: BrowserContext; windowId: string; tabId: string }
   | { type: 'sessionCreated'; context: BrowserContext }

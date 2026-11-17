@@ -11,6 +11,7 @@ export type RequestPolicyState = {
 
 export class NetworkPolicyCoordinator {
   private readonly policies = new WeakMap<Session, RequestPolicyState>();
+  private readonly owners = new WeakMap<Session, Set<string>>();
 
   get(browserSession: Session): RequestPolicyState {
     return { ...(this.policies.get(browserSession) ?? {
@@ -30,12 +31,18 @@ export class NetworkPolicyCoordinator {
     });
   }
 
-  claimNative(browserSession: Session): () => void {
+  claimNative(browserSession: Session, owner = 'requests'): () => void {
     const current = this.get(browserSession);
     if (current.strategy !== 'native-shields') throw new BrowserError('CONFLICT', '尚未批准此会话使用原生 Shields 请求路线');
-    if (current.nativeRegistered) throw new BrowserError('CONFLICT', '此会话已经注册原生请求处理');
+    const owners = this.owners.get(browserSession) ?? new Set<string>();
+    if (owners.has(owner)) throw new BrowserError('CONFLICT', '此会话已经注册此类原生请求处理');
+    owners.add(owner);
+    this.owners.set(browserSession, owners);
     this.policies.set(browserSession, { ...current, nativeRegistered: true, extensionNetworkAvailable: false });
-    return () => this.policies.set(browserSession, { ...current, nativeRegistered: false });
+    return () => {
+      owners.delete(owner);
+      this.policies.set(browserSession, { ...current, nativeRegistered: owners.size > 0 });
+    };
   }
 
   requireExtensionNetwork(browserSession: Session): void {

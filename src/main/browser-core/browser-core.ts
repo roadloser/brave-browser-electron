@@ -76,6 +76,7 @@ export class BrowserCore implements BrowserCorePort {
     const window = this.windows.get(windowId);
     return {
       ...window.context, id: window.id,
+      ready: window.ready,
       tabs: window.tabIds.map(tabId => this.getTab(tabId)), activeTabId: window.activeTabId,
       layout: structuredClone(window.layout), maximized: window.native.isMaximized(),
       fullscreen: window.native.isFullScreen(), revision: this.revision,
@@ -108,6 +109,7 @@ export class BrowserCore implements BrowserCorePort {
     const profile = this.profiles.get(options.profileId);
     const window = await this.createWindow(profile.id, options.isPrivate ?? false);
     await this.openTab({ windowId: window.id });
+    this.ready(window);
     return this.getWindow(window.id);
   }
 
@@ -195,6 +197,7 @@ export class BrowserCore implements BrowserCorePort {
           window.layout.splitTabIds = saved.layout.splitTabIds.filter(tabId => window.tabIds.includes(tabId));
           window.layout.sidebarTabId = saved.layout.sidebarTabId && window.tabIds.includes(saved.layout.sidebarTabId) ? saved.layout.sidebarTabId : null;
           if (!window.tabIds.length) await this.openTab({ windowId: window.id });
+          this.ready(window);
           this.changed(window);
         }
       }
@@ -222,6 +225,11 @@ export class BrowserCore implements BrowserCorePort {
       return window;
     }
     catch (error) { await this.sessions.release(context); throw error; }
+  }
+  private ready(window: WindowRecord): void {
+    window.ready = true;
+    this.events.emit({ type: 'windowReady', windowId: window.id, context: window.context });
+    this.changed(window);
   }
   private windowForTab(tabId: string) { return this.windows.get(this.tabs.get(tabId).snapshot.windowId); }
   private changed(window: WindowRecord): void {

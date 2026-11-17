@@ -8,12 +8,24 @@ export class SettingsService {
   private readonly repository: SettingsRepository;
   private readonly revisions = new Map<string, number>();
   private readonly disposeEvents: () => void;
+  private readonly headerDisposers = new Map<string, () => void>();
 
   constructor(private readonly runtime: FeatureRuntime) {
     this.repository = new SettingsRepository(runtime.storage);
     for (const profile of runtime.core.getProfiles()) this.apply(profile.id);
     this.disposeEvents = runtime.core.onEvent(event => {
-      if (event.type === 'sessionCreated') this.apply(event.context.profileId);
+      if (event.type === 'sessionCreated') {
+        this.apply(event.context.profileId);
+        this.headerDisposers.set(event.context.contextId, runtime.requests.attachHeaders(runtime.core.sessionForContext(event.context), details => {
+          const headers = { ...details.requestHeaders };
+          if (this.repository.get(event.context.profileId).doNotTrack) headers.DNT = '1';
+          return headers;
+        }));
+      }
+      if (event.type === 'contextDisposed') {
+        this.headerDisposers.get(event.context.contextId)?.();
+        this.headerDisposers.delete(event.context.contextId);
+      }
     });
   }
   get(profileId: string): SettingsState {
@@ -36,6 +48,6 @@ export class SettingsService {
     });
     return result.canceled ? this.get(context.profileId) : this.update(context, { downloadDirectory: result.filePaths[0] });
   }
-  dispose(): void { this.disposeEvents(); }
+  dispose(): void { this.disposeEvents(); for (const dispose of this.headerDisposers.values()) dispose(); this.headerDisposers.clear(); }
   private apply(profileId: string): void { this.runtime.core.configureProfile(profileId, this.repository.get(profileId)); }
 }

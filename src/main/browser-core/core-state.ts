@@ -9,6 +9,7 @@ export type TabRecord = {
 };
 export type WindowRecord = {
   id: string;
+  ready: boolean;
   context: BrowserContext;
   native: BrowserWindow;
   tabIds: string[];

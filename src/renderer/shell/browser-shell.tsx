@@ -30,10 +30,10 @@ export function BrowserShell({ renderPage, toolbarSlots, sidebarSlots, bookmarks
   const error = useBrowserStore((state) => state.error);
   const currentWindow = snapshot?.windows.find((entry) => entry.id === snapshot.currentWindowId);
   const tab = currentWindow?.tabs.find((entry) => entry.id === currentWindow.activeTabId);
-  const groups = useTabGroups(currentWindow?.id);
+  const groups = useTabGroups(currentWindow?.ready ? currentWindow.id : undefined);
   useShellSettings(currentWindow?.profileId);
   useBrowserShortcuts(currentWindow);
-  if (!currentWindow) return (
+  if (!currentWindow?.ready) return (
     <div className="browser-loading">
       <LoaderCircle size={24} className="spinning" /><span>正在恢复浏览器…</span>
       {error && <ErrorNotice message={error} />}

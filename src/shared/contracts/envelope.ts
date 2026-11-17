@@ -9,6 +9,9 @@ import { siteSettingsCommandSchemas, type SiteSettingsCommandResults, type SiteS
 import { credentialsCommandSchemas, type CredentialsCommandResults, type CredentialsState } from './credentials';
 import { pageToolsCommandSchemas, type PageToolsCommandResults, type TranslationState } from './page-tools';
 import { newTabCommandSchemas, type NewTabCommandResults, type NewTabState } from './new-tab';
+import { leoCommandSchemas, type LeoCommandResults, type LeoState } from './leo';
+import { extensionsCommandSchemas, type ExtensionsCommandResults, type ExtensionsState } from './extensions';
+import { shieldsCommandSchemas, type ShieldsCommandResults, type ShieldsState, type ShieldRuleState } from './shields';
 import type { WireError } from '../errors';
 
 export const WIRE_VERSION = 1;
@@ -19,13 +22,15 @@ export const commandSchemas = {
   ...bookmarkCommandSchemas, ...historyCommandSchemas,
   ...settingsCommandSchemas, ...downloadsCommandSchemas, ...siteSettingsCommandSchemas,
   ...credentialsCommandSchemas, ...pageToolsCommandSchemas, ...newTabCommandSchemas,
+  ...leoCommandSchemas, ...extensionsCommandSchemas, ...shieldsCommandSchemas,
 };
 export type CommandName = keyof typeof commandSchemas;
 export type CommandInput<Name extends CommandName> = z.input<(typeof commandSchemas)[Name]>;
 export type CommandPayload<Name extends CommandName> = z.output<(typeof commandSchemas)[Name]>;
 export type CommandResults = BrowserCommandResults & TabGroupCommandResults & BookmarkCommandResults & HistoryCommandResults
   & SettingsCommandResults & DownloadsCommandResults & SiteSettingsCommandResults
-  & CredentialsCommandResults & PageToolsCommandResults & NewTabCommandResults;
+  & CredentialsCommandResults & PageToolsCommandResults & NewTabCommandResults
+  & LeoCommandResults & ExtensionsCommandResults & ShieldsCommandResults;
 export type CommandEnvelope = {
   version: typeof WIRE_VERSION; requestId: string; command: CommandName; payload: unknown;
 };
@@ -42,6 +47,10 @@ export interface BrowserEvents {
   'credentials.changed': CredentialsState;
   'pageTools.translationChanged': TranslationState;
   'newTab.changed': NewTabState;
+  'leo.changed': LeoState;
+  'extensions.changed': ExtensionsState;
+  'shields.changed': ShieldsState;
+  'shields.rulesChanged': ShieldRuleState;
   'app.error': WireError;
 }
 export type EventName = keyof BrowserEvents;

@@ -38,6 +38,7 @@ export class WindowManager {
     });
     const record: WindowRecord = {
       id: saved?.id ?? randomUUID(), context, native,
+      ready: false,
       tabIds: [], activeTabId: null,
       layout: saved ? { ...saved.layout, contentVisible: true, splitTabIds: [], sidebarTabId: null } : defaultLayout(),
     };

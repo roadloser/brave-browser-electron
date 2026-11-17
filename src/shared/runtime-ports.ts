@@ -1,4 +1,4 @@
-import type { BrowserWindow, OnBeforeRequestListenerDetails, Session, WebContents } from 'electron';
+import type { BrowserWindow, OnBeforeRequestListenerDetails, OnBeforeSendHeadersListenerDetails, Session, WebContents } from 'electron';
 import type { BrowserContext, BrowserSnapshot, CoreEvent, BrowserLayout, ProfileSnapshot, TabSnapshot, WindowSnapshot } from './contracts/browser-core';
 import type { Dispose } from './contracts/envelope';
 import type { BrowserSettings } from './contracts/settings';
@@ -32,6 +32,7 @@ export interface SecretStorePort {
 export type RequestDecision = { cancel?: boolean; redirectURL?: string };
 export interface RequestHostPort {
   attach(browserSession: Session, evaluate: (details: OnBeforeRequestListenerDetails) => RequestDecision | Promise<RequestDecision>, onError: (error: unknown) => void): Dispose;
+  attachHeaders(browserSession: Session, policy: (details: OnBeforeSendHeadersListenerDetails) => Record<string, string>): Dispose;
 }
 export interface BrowserCorePort {
   getProfiles(): ProfileSnapshot[];
