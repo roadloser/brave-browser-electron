@@ -35,6 +35,9 @@ export function ShieldsPanel({ tab }: { tab?: TabSnapshot }) {
         <label className="shields-setting"><span>阻止脚本</span><input type="checkbox" checked={shields.state.policy.blockScripts} disabled={!enabled || shields.pending} onChange={event => update({ blockScripts: event.target.checked })} /></label>
         <label className="shields-setting"><span>升级至 HTTPS</span><input type="checkbox" checked={shields.state.policy.httpsUpgrade} disabled={!enabled || shields.pending} onChange={event => update({ httpsUpgrade: event.target.checked })} /></label>
         <p className="shields-note">站点策略变更后网页会重新加载。{tab?.isPrivate ? '私密窗口的站点更改仅保留到窗口关闭。' : ''}</p>
+        {shields.state.scopeDiagnostics?.lastIssue && <p className="shields-warning">
+          {shields.state.scopeDiagnostics.lastIssue}。缺少策略 {shields.state.scopeDiagnostics.missingPolicy} 次，缺少来源 {shields.state.scopeDiagnostics.missingSource} 次，referrer映射 {shields.state.scopeDiagnostics.referrerFallback} 次。
+        </p>}
         <button disabled={shields.pending} onClick={() => void shields.run(() => browserClient.command('shields.resetPolicy', { origin: shields.state!.origin }))}>恢复此站点默认设置</button>
         {Object.entries(shields.state.categories).length > 0 && <ul className="shields-categories">{Object.entries(shields.state.categories).map(([name, count]) => <li key={name}><span>{name}</span><strong>{count}</strong></li>)}</ul>}
       </>}

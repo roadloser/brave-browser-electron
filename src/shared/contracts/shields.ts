@@ -12,6 +12,7 @@ export type ShieldsState = {
   categories: Record<string, number>; ruleVersion: string | null;
   engine: { status: 'unconfigured' | 'loading' | 'ready' | 'failed'; name: string | null; error?: string };
   revision: number;
+  scopeDiagnostics?: { missingPolicy: number; missingSource: number; referrerFallback: number; lastIssue?: string };
 };
 export type ShieldRuleState = { version: string | null; previousVersion: string | null; updatedAt: number | null; status: 'idle' | 'updating' | 'ready' | 'failed'; error?: string; revision: number };
 export const shieldsCommandSchemas = {

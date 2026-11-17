@@ -32,6 +32,7 @@ export class GhosteryContentAdapter implements CosmeticRuntimePort {
 
   apply(plan: CosmeticPagePlan): void {
     if (!plan.active) { this.clear(); return; }
+    if (!this.styleElement.isConnected) (document.head ?? document.documentElement)?.appendChild(this.styleElement);
     if (plan.styles && !this.styles.has(plan.styles)) {
       this.styles.add(plan.styles);
       this.styleElement.textContent = [...this.styles].join('\n');
