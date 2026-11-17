@@ -6,6 +6,7 @@ import type { NewsTopic, SimilarityMatrix } from './providers/topics-provider';
 export type NewsDocument = {
   state: NewsState; catalog: ScopedPublisher[]; candidates: ScoredArticle[];
   topics: NewsTopic[]; similarities: SimilarityMatrix; enrichmentLocale?: string;
+  channelsByLocale?: Record<string, Record<string, boolean>>;
 };
 export const contentMigrations: readonly Migration[] = [{
   id: 'content-services', version: 1,
@@ -19,6 +20,7 @@ export const contentMigrations: readonly Migration[] = [{
     document.topics ??= []; document.similarities ??= {};
     document.state.feed ??= document.state.articles.map((article) => ({ id: article.id, kind: 'article', articleId: article.id, discover: false }));
     document.state.topicsStatus ??= 'idle';
+    document.channelsByLocale ??= {};
     database.run('UPDATE news_document SET document = ? WHERE id = 1', [JSON.stringify(document)]);
   },
 }];
@@ -26,7 +28,7 @@ export function defaultNewsDocument(): NewsDocument {
   return {
     state: { enabled: false, locale: 'en-US', publishers: [], enabledPublisherIds: [], disabledPublisherIds: [],
       channels: [], directFeeds: [], articles: [], feed: [], topicsStatus: 'idle', lastUpdated: null, status: 'idle', revision: 0 },
-    catalog: [], candidates: [], topics: [], similarities: {},
+    catalog: [], candidates: [], topics: [], similarities: {}, channelsByLocale: {},
   };
 }
 export class NewsRepository {

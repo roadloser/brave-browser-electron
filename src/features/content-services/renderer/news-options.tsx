@@ -39,9 +39,11 @@ export function NewsOptions({ state, open, onOpenChange, onState }: {
       </div>
       <h3>来源</h3><input className="text-input" value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="搜索新闻来源" aria-label="搜索新闻来源" />
       <div className="news-publisher-list">{state.publishers.filter((publisher) => publisher.name.toLowerCase().includes(filter.toLowerCase())).map((publisher) =>
-        <label key={publisher.id}><input type="checkbox" checked={state.enabledPublisherIds.includes(publisher.id)} disabled={busy}
-          onChange={(event) => void run(() => browserClient.command('news.setPublisher', { id: publisher.id, enabled: event.target.checked }))} /><span>{publisher.name}</span>
-          {state.disabledPublisherIds.includes(publisher.id) && <small>已屏蔽</small>}</label>)}</div>
+        <div className="news-publisher-option" key={publisher.id}><label><input type="checkbox" checked={state.enabledPublisherIds.includes(publisher.id)} disabled={busy}
+          onChange={(event) => void run(() => event.target.checked ? browserClient.command('news.setPublisher', { id: publisher.id, enabled: true }) :
+            browserClient.command('news.resetPublisher', { id: publisher.id }))} /><span>{publisher.name}</span></label>
+          {state.disabledPublisherIds.includes(publisher.id) && <button type="button" className="news-restore-source" disabled={busy}
+            onClick={() => void run(() => browserClient.command('news.resetPublisher', { id: publisher.id }))}>恢复显示</button>}</div>)}</div>
       <h3>RSS 订阅</h3>
       <form onSubmit={(event) => { event.preventDefault(); void run(async () => {
         const next = await browserClient.command('news.addFeed', { url: feedUrl }); setFeedUrl(''); return next;

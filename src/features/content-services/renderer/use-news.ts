@@ -8,6 +8,7 @@ export function useNews(contextId: string) {
   const accept = useCallback((next: NewsState) => setState((current) => !current || next.revision >= current.revision ? next : current), []);
   useEffect(() => {
     let alive = true;
+    setState(null); setError('');
     const receive = (next: NewsState) => { if (alive) accept(next); };
     const dispose = browserClient.on('news.changed', receive);
     browserClient.command('news.get', {}).then((next) => {

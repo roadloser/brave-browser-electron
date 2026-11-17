@@ -30,7 +30,9 @@ export class ArticlePool {
     if (!options.channel && !groups.length) return [];
     const fromGroup = (hero: boolean) => {
       if (options.channel) return roulette(this.remaining.filter((entry) => entry.channels.includes(options.channel!)));
-      const group = groups[Math.floor(Math.random() * groups.length)];
+      const currentGroups = this.groups();
+      if (!currentGroups.length) return undefined;
+      const group = currentGroups[Math.floor(Math.random() * currentGroups.length)];
       return roulette(this.remaining.filter((entry) => (!hero || entry.article.imageUrl) &&
         (group.channel ? entry.channels.includes(group.id) : entry.article.publisherId === group.id)));
     };

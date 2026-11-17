@@ -34,8 +34,11 @@ export class NewsService {
   setLocale(context: CommandContext, locale: string) {
     this.cancel(context);
     return this.commit(context, (document) => {
+      document.channelsByLocale ??= {};
+      document.channelsByLocale[document.state.locale] = Object.fromEntries(document.state.channels.map((channel) => [channel.id, channel.enabled]));
       document.state.locale = locale; document.state.lastUpdated = null;
       document.state.channels = [];
+      document.state.feed = []; document.state.articles = []; document.candidates = [];
       document.topics = []; document.similarities = {}; document.enrichmentLocale = undefined;
       document.state.topicsStatus = 'idle'; document.state.topicsError = undefined; document.state.recommendationsError = undefined;
     });
@@ -54,6 +57,15 @@ export class NewsService {
       const channel = document.state.channels.find((entry) => entry.id === id);
       if (!channel) throw new BrowserError('NOT_FOUND', '新闻频道已不存在');
       channel.enabled = enabled; selectArticles(document, this.recentUrls(context));
+      document.channelsByLocale ??= {};
+      document.channelsByLocale[document.state.locale] = Object.fromEntries(document.state.channels.map((entry) => [entry.id, entry.enabled]));
+    });
+  }
+  resetPublisher(context: CommandContext, id: string) {
+    return this.commit(context, (document) => {
+      document.state.enabledPublisherIds = document.state.enabledPublisherIds.filter((entry) => entry !== id);
+      document.state.disabledPublisherIds = document.state.disabledPublisherIds.filter((entry) => entry !== id);
+      selectArticles(document, this.recentUrls(context));
     });
   }
   cancel(context: CommandContext) {
@@ -106,18 +118,30 @@ export class NewsService {
         document.state.topicsError = enrichment.topics.error;
         document.state.recommendationsError = enrichment.recommendations.error;
         document.state.publishers = catalogResult.catalog.map(({ defaultEnabled: _default, locales: _locales, ...publisher }) => publisher);
-        const selected = new Map(document.state.channels.map((channel) => [channel.id, channel.enabled]));
+        const selected = new Map(Object.entries(document.channelsByLocale?.[document.state.locale] ??
+          Object.fromEntries(document.state.channels.map((channel) => [channel.id, channel.enabled]))));
         const channels = [...new Set(catalogResult.catalog.flatMap((publisher) => publisher.locales.filter((entry) => entry.locale === locale).flatMap((entry) => entry.channels)))];
-        document.state.channels = channels.map((name) => ({ id: name, name, enabled: selected.get(name) ?? true }));
-        document.state.directFeeds = direct.map((result) => ({ ...result.feed, error: result.error || undefined }));
+        const initiallySubscribed = selected.size === 0 && !document.channelsByLocale?.[document.state.locale];
+        document.state.channels = channels.map((name) => ({ id: name, name, enabled: selected.get(name) ?? (initiallySubscribed && name === 'Top Sources') }));
+        document.channelsByLocale ??= {};
+        if (channels.length) document.channelsByLocale[document.state.locale] = Object.fromEntries(document.state.channels.map((channel) => [channel.id, channel.enabled]));
+        document.state.directFeeds = document.state.directFeeds.map((feed) => {
+          const result = direct.find((entry) => entry.feed.id === feed.id);
+          return result ? { ...result.feed, error: result.error || undefined } : feed;
+        });
         if (anySuccess) {
           const directIds = new Set(document.state.directFeeds.map((feed) => feed.id));
           const combinedArticles = combined.flatMap((result) => result.articles);
           const retainedCombined = combined.some((result) => result.error) ? document.candidates.filter((article) => !directIds.has(article.publisherId)) : [];
           const retainedDirect = direct.filter((result) => result.error).flatMap((result) => document.candidates.filter((article) => article.publisherId === result.feed.id));
-          document.candidates = [...combinedArticles, ...retainedCombined, ...direct.flatMap((result) => result.articles), ...retainedDirect];
-          selectArticles(document, this.recentUrls(context));
+          const existingDirectIds = new Set(document.state.directFeeds.map((feed) => feed.id));
+          const concurrentDirect = document.candidates.filter((article) => existingDirectIds.has(article.publisherId) &&
+            !prior.state.directFeeds.some((feed) => feed.id === article.publisherId));
+          document.candidates = [...combinedArticles, ...retainedCombined, ...direct.filter((result) => existingDirectIds.has(result.feed.id)).flatMap((result) => result.articles), ...retainedDirect, ...concurrentDirect];
           document.state.lastUpdated = Date.now();
+        }
+        if (anySuccess || (!enrichment.topics.error && document.candidates.length)) {
+          selectArticles(document, this.recentUrls(context));
         }
         document.state.status = anySuccess ? 'ready' : 'failed';
         document.state.error = errors.length ? `部分新闻来源未更新，已保留可用缓存：${[...new Set(errors)].join('；')}` : undefined;

@@ -26,10 +26,13 @@ export class BraveTopicsAdapter implements NewsTopicsPort {
       if (!result.success || !/^https?:/.test(result.data.url)) return [];
       return [result.data];
     });
+    if (rawArticles.length && !articles.length) throw new BrowserError('UNAVAILABLE', '官方话题文章字段发生变化，保留上次话题');
     const topics: NewsTopic[] = [];
+    let validTopics = 0;
     for (const raw of rawTopics) {
       const result = topicSchema.safeParse(raw);
       if (!result.success) continue;
+      validTopics++;
       const topic = result.data;
       const mapped = articles.filter((article) => article.topic_index === topic.topic_index).map((article) => ({
         id: createHash('sha256').update(article.url).digest('hex'),
@@ -41,6 +44,7 @@ export class BraveTopicsAdapter implements NewsTopicsPort {
       }));
       if (mapped.length) topics.push({ id: String(topic.topic_index), title: topic.claude_title_short || topic.title, articles: mapped });
     }
+    if (rawTopics.length && !validTopics) throw new BrowserError('UNAVAILABLE', '官方话题字段发生变化，保留上次话题');
     return topics;
   }
 }

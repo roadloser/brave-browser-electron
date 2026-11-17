@@ -1,0 +1,41 @@
+.news-v2-feed { display: flex; flex-direction: column; gap: 16px; max-width: 880px; margin: 0 auto; }
+.news-v2-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 13px; overflow: hidden; }
+.news-v2-article-link { width: 100%; display: flex; gap: 18px; padding: 18px; border: 0; background: none; text-align: left; color: var(--color-text); }
+.news-v2-article-link:hover h3 { color: var(--color-accent); }
+.news-v2-article-text { flex: 1; min-width: 0; }
+.news-v2-article-text h3 { font-size: 18px; line-height: 1.45; margin: 0; font-weight: 600; }
+.news-v2-article-text p { line-height: 1.65; color: var(--color-muted); margin: 12px 0 0; font-size: 13px; }
+.news-image { flex: 0 0 150px; width: 150px; height: 98px; border-radius: 8px; background: var(--color-surface-subtle); overflow: hidden; }
+.news-image img { width: 100%; height: 100%; object-fit: cover; }
+.news-v2-hero .news-v2-article-link { display: block; padding: 0; }
+.news-v2-hero .news-image { width: 100%; height: clamp(180px, 28vw, 360px); border-radius: 0; }
+.news-v2-hero .news-v2-article-text { padding: 23px 25px 7px; }
+.news-v2-hero .news-v2-article-text h3 { font-size: clamp(22px, 2.8vw, 29px); line-height: 1.3; }
+.news-v2-meta { display: flex; align-items: center; gap: 9px; padding: 0 18px 12px; color: var(--color-muted); font-size: 11px; }
+.news-v2-meta > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.news-v2-meta time { white-space: nowrap; }
+.news-v2-meta .icon-button { margin-left: auto; }
+.news-discovery-label { display: inline-block; color: var(--color-accent); background: var(--color-accent-soft); padding: 3px 6px; border-radius: 5px; font-size: 10px; margin-bottom: 7px; }
+.news-cluster { border-radius: 14px; padding: 20px; background: var(--color-surface-subtle); border: 1px solid var(--color-border); }
+.news-cluster > header { margin-bottom: 15px; }
+.news-cluster > header > span { font-size: 10px; color: var(--color-muted); }
+.news-cluster > header > h3 { margin: 5px 0 0; font-size: 21px; font-weight: 600; }
+.news-cluster > div { display: flex; flex-direction: column; gap: 9px; }
+.news-cluster .news-v2-card { border-color: transparent; }
+.news-cluster .news-v2-article-text h3 { font-size: 16px; }
+.news-cluster .news-v2-hero .news-v2-article-text h3 { font-size: 22px; }
+.news-discover-card { border-radius: 14px; padding: 22px; border: 1px solid var(--color-border); background: var(--color-accent-soft); }
+.news-discover-card > header h3 { margin: 0; font-size: 20px; }
+.news-discover-card > header p { color: var(--color-muted); font-size: 12px; margin: 8px 0 18px; }
+.news-discover-card > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.news-discover-card article { background: var(--color-surface); border-radius: 10px; padding: 16px; text-align: center; display: flex; align-items: center; flex-direction: column; }
+.news-source-monogram { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; background: var(--color-hover); color: var(--color-accent); font-size: 20px; font-weight: 600; }
+.news-discover-card h4 { font-size: 13px; margin: 10px 0 0; overflow-wrap: anywhere; }
+.news-discover-card article p { flex: 1; color: var(--color-muted); font-size: 10px; margin: 6px 0 13px; }
+.news-resource-status { margin: 9px 0; color: var(--color-muted); font-size: 11px; }
+.news-resource-status summary { cursor: pointer; }
+.news-resource-status p { margin: 7px 0; line-height: 1.7; }
+.news-restore-source { background: none; color: var(--color-accent); border: 0; font-size: 10px; padding: 4px; }
+.news-publisher-option { display: flex; gap: 8px; align-items: center; border-bottom: 1px solid var(--color-border); }
+.news-publisher-option > label { flex: 1; border-bottom: 0; }
+@media (max-width: 760px) { .news-v2-article-link { gap: 12px; padding: 14px; } .news-image { flex-basis: 100px; width: 100px; height: 80px; } .news-discover-card > div { grid-template-columns: 1fr; } .news-cluster { padding: 12px; } }
