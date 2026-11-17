@@ -146,6 +146,7 @@ export class PrivacyService {
       const hash = scope.nonce ? chromiumNonceHash(scope.nonce) : 0n;
       return { mode, token: { high: (BigInt(token.high) ^ hash).toString(), low: (BigInt(token.low) ^ hash).toString() },
         scope: sourceSite, hardwareConcurrency: cpus().length, webglBalanced: false,
+        pageZoom: this.runtime.core.getTabWebContents(tab.id).getZoomFactor(),
         screenFingerprinting: process.platform === 'darwin' && (kind === 'window' || kind === 'iframe') };
     }, this.runtime.assets.privacyWorldSource, outcome => {
       const outcomes = this.cdpOutcomes.get(tab.id) ?? new Map();
