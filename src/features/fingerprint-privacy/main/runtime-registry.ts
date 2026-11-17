@@ -1,6 +1,7 @@
 import { BrowserError } from '../../../shared/errors';
 
 export interface PrivacyRuntimeInstance {
+  available(): boolean;
   start(): Promise<void>;
   updateZoom(factor: number): Promise<void>;
   dispose(): void;
@@ -12,12 +13,16 @@ export class PrivacyRuntimeRegistry {
   private readonly generations = new Map<string, number>();
   private disposed = false;
 
-  has(tabId: string): boolean { return this.active.has(tabId); }
-  current(tabId: string): PrivacyRuntimeInstance | undefined { return this.active.get(tabId); }
+  has(tabId: string): boolean { return Boolean(this.current(tabId)); }
+  current(tabId: string): PrivacyRuntimeInstance | undefined {
+    const instance = this.active.get(tabId);
+    if (instance && !instance.available()) { this.active.delete(tabId); return undefined; }
+    return instance;
+  }
 
   prepare(tabId: string, create: () => PrivacyRuntimeInstance): Promise<void> {
     if (this.disposed) return Promise.reject(new BrowserError('CANCELLED', '指纹运行时已释放'));
-    if (this.active.has(tabId)) return Promise.resolve();
+    if (this.has(tabId)) return Promise.resolve();
     const existing = this.pending.get(tabId);
     if (existing) return existing;
     const generation = this.generations.get(tabId) ?? 0;

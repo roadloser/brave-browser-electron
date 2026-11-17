@@ -41,8 +41,8 @@ export class PrivacyService {
         this.tabs.delete(event.tabId);
         this.cdpContexts.release(event.tabId); this.cdpOutcomes.delete(event.tabId);
       }
-      if (event.type === 'contextDisposed' && event.context.isPrivate) {
-        this.privateModes.delete(event.context.contextId); this.tokens.release(event.context.contextId);
+      if (event.type === 'contextDisposed') {
+        if (event.context.isPrivate) { this.privateModes.delete(event.context.contextId); this.tokens.release(event.context.contextId); }
         for (const [tabId, tab] of this.tabs) if (tab.contextId === event.context.contextId) {
           this.cdpContexts.release(tabId); this.cdpOutcomes.delete(tabId); this.tabs.delete(tabId);
         }
