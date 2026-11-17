@@ -9,6 +9,7 @@ await build({ configFile: 'vite.preload.config.ts' });
 await build({ configFile: 'vite.credentials.config.ts' });
 await build({ configFile: 'vite.translation.config.ts' });
 await build({ configFile: 'vite.shields.config.ts' });
+await build({ configFile: 'vite.privacy.config.ts' });
 await build({ configFile: 'vite.main.config.ts' });
 const child = spawn(electron, ['.'], {
   stdio: 'inherit',

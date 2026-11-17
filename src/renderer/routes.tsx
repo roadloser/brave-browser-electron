@@ -7,10 +7,12 @@ import { NewTabPage } from '../features/new-tab/renderer/new-tab-page';
 import { SitePermissionPanel } from '../features/site-settings/renderer/site-permission-panel';
 import { CredentialsPage } from '../features/credentials/renderer/credentials-page';
 import { ExtensionsPage } from '../features/extensions/renderer/extensions-page';
+import { SyncSettings } from '../features/sync/renderer/sync-settings';
 
 export function renderBrowserPage(url: string, context: { tab: TabSnapshot; window: WindowSnapshot }) {
   if (url === 'brave://newtab' || url === 'brave://newtab/') return <NewTabPage {...context} />;
   if (url === 'brave://settings/passwords' || url === 'brave://credentials') return <CredentialsPage />;
+  if (url === 'brave://settings/sync' || url === 'brave://sync') return <SyncSettings />;
   if (url === 'brave://settings/sites' || url === 'brave://site-settings') return <SitePermissionPanel />;
   if (url === 'brave://extensions' || url.startsWith('brave://extensions/')) return <ExtensionsPage />;
   if (url === 'brave://bookmarks' || url.startsWith('brave://bookmarks/')) return <BookmarksPage />;

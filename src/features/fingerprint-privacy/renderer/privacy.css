@@ -1,0 +1,13 @@
+.privacy-settings { height: 100%; overflow: auto; padding: 28px 36px; box-sizing: border-box; background: var(--color-surface); color: var(--color-text); }
+.privacy-settings h1 { font-size: 24px; margin: 0 0 20px; }
+.privacy-settings h2 { font-size: 17px; margin: 28px 0 16px; }
+.privacy-warning { background: var(--color-danger-soft); color: var(--color-danger); padding: 16px; border-radius: 10px; line-height: 1.7; }
+.privacy-field { display: flex; align-items: center; gap: 24px; margin: 20px 0; }
+.privacy-field select { min-width: 180px; border: 1px solid var(--color-border); background: var(--color-surface); color: inherit; padding: 9px; border-radius: 8px; font: inherit; }
+.privacy-settings table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.privacy-settings th, .privacy-settings td { padding: 10px 12px; border-bottom: 1px solid var(--color-border); text-align: left; vertical-align: top; line-height: 1.6; }
+.privacy-settings th { color: var(--color-muted); font-weight: 500; white-space: nowrap; }
+.privacy-settings td:nth-child(3), .privacy-settings td:nth-child(4) { white-space: nowrap; }
+.privacy-site { padding: 4px 18px 14px; background: var(--color-bg); border-radius: 10px; }
+.privacy-site p, .privacy-meta { font-size: 13px; line-height: 1.7; color: var(--color-muted); }
+.privacy-settings [role=alert] { color: var(--color-danger); }

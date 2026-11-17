@@ -12,6 +12,7 @@ import { extensionsFeature } from '../../features/extensions/main';
 import { leoFeature } from '../../features/leo/main';
 import { shieldsFeature } from '../../features/shields/main';
 import { contentServicesFeature } from '../../features/content-services/main';
+import { syncFeature } from '../../features/sync/main';
 
 export const featureManifest: readonly FeatureDefinition[] = [
   settingsFeature,
@@ -27,4 +28,5 @@ export const featureManifest: readonly FeatureDefinition[] = [
   extensionsFeature,
   leoFeature,
   contentServicesFeature,
+  syncFeature,
 ];

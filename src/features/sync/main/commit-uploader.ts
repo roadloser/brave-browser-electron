@@ -55,8 +55,9 @@ export class CommitUploader {
     const parent = entry.item.type === 'bookmarks' ? entry.item.value.parentId : undefined;
     const parentServer = parent ? Object.entries(roots).find(([, local]) => local === parent)?.[0] ?? this.repository.entities(profileId).find(value => value.type === 'bookmarks' && value.localId === parent)?.serverId ?? parent : undefined;
     return {
-      id_string: previous?.serverId ?? entry.id, version: previous?.version ?? '0', name: 'encrypted', mtime: String(Date.now()),
-      ctime: previous?.wire.ctime ?? String(Date.now()), parent_id_string: parentServer,
+      id_string: previous?.serverId ?? entry.id, version: previous?.version ?? '0', name: 'encrypted',
+      mtime: String(entry.item.type === 'bookmarks' ? entry.item.value.updatedAt : Date.now()),
+      ctime: previous?.wire.ctime ?? String(entry.item.type === 'bookmarks' ? entry.item.value.createdAt : Date.now()), parent_id_string: parentServer,
       folder: entry.item.type === 'bookmarks' && entry.item.value.kind === 'folder',
       originator_cache_guid: deviceId, originator_client_item_id: entry.id,
       client_tag_hash: clientTagHash(mapped.field, mapped.tag), specifics: nigori.encrypt(mapped.specifics, mapped.field),

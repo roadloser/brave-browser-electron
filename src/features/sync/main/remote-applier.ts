@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { FeatureRuntime } from '../../../shared/module-lifecycle';
 import type { SyncLocalChange, SyncLocalItem, SyncLocalType } from '../../../shared/sync-data-ports';
 import { SyncRepository } from './repository';
-import { itemFromEntity, localHash, rootTags } from './protocol/data-mapping';
+import { clientTagHash, itemFromEntity, localHash, rootTags, specificsForItem } from './protocol/data-mapping';
 import { positionBytes } from './protocol/position';
 import { applyHistoryDirective } from './protocol/history-deletions';
 import type { NigoriController } from './protocol/nigori-controller';
@@ -14,19 +14,30 @@ export class RemoteApplier {
     const known = this.repository.entities(profileId);
     const pending = this.repository.journal(profileId);
     const roots = this.repository.metadata<Record<string, string>>(profileId, 'roots') ?? {};
+    const deviceId = this.repository.configuration(profileId)?.deviceId ?? '';
     for (const entity of remote) if (entity.id_string && entity.server_defined_unique_tag && rootTags[entity.server_defined_unique_tag]) roots[entity.id_string] = rootTags[entity.server_defined_unique_tag];
     const mapped: Array<{ entity: SyncEntity; item: SyncLocalItem | null; previous?: SyncedEntity; position: Buffer }> = [];
     const directiveChanges: SyncLocalChange[] = [];
-    for (const entity of remote) {
+    const mergedRemote = new Map(remote.map(entity => [entity.id_string, entity]));
+    for (const previous of known) {
+      if (previous.type === 'bookmarks' && previous.item && !mergedRemote.has(previous.serverId)) mergedRemote.set(previous.serverId, previous.wire);
+    }
+    for (const entity of mergedRemote.values()) {
       if (entity.server_defined_unique_tag) continue;
       const previous = known.find(candidate => candidate.serverId === entity.id_string || (!!entity.client_tag_hash && candidate.wire.client_tag_hash === entity.client_tag_hash));
-      if (previous && BigInt(entity.version ?? 0) <= BigInt(previous.version)) continue;
+      if (previous && previous.type !== 'bookmarks' && BigInt(entity.version ?? 0) <= BigInt(previous.version)) continue;
       const specifics = nigori.decrypt(entity.specifics ?? {});
       if (specifics.history_delete_directive) {
         directiveChanges.push(...applyHistoryDirective(specifics, this.runtime.syncData.snapshot(profileId, 'history')));
         continue;
       }
       let item = entity.deleted ? null : itemFromEntity(entity, specifics, roots);
+      const matchedPending = !previous && entity.client_tag_hash ? pending.find(candidate => {
+        if (!candidate.item) return false;
+        const mapped = specificsForItem(candidate.item, deviceId);
+        return clientTagHash(mapped.field, mapped.tag) === entity.client_tag_hash;
+      }) : undefined;
+      if (item && matchedPending && item.id !== matchedPending.id) item = { ...item, id: matchedPending.id, value: { ...item.value, id: matchedPending.id } } as SyncLocalItem;
       if (item && previous && item.id !== previous.localId) item = { ...item, id: previous.localId, value: { ...item.value, id: previous.localId } } as SyncLocalItem;
       if (!item && !previous) continue;
       mapped.push({ entity, item, previous, position: positionBytes(specifics.bookmark?.unique_position as Record<string, unknown> | undefined ?? entity.unique_position) });
@@ -46,6 +57,10 @@ export class RemoteApplier {
         const hash = localHash(value.item);
         const tracked: SyncedEntity = { type, localId, serverId: value.entity.id_string!, version: value.entity.version ?? '0', item: value.item, hash, wire: value.entity };
         const unsent = pending.find(entry => entry.type === type && entry.id === localId);
+        if (unsent && unsent.hash !== hash && value.previous?.hash === hash) {
+          this.repository.saveEntity(profileId, tracked);
+          continue;
+        }
         if (unsent && unsent.hash !== hash && value.previous?.hash !== hash) {
           const existing = this.repository.conflicts(profileId).find(conflict => conflict.dataType === type && conflict.itemId === localId);
           this.repository.saveConflict(profileId, {

@@ -17,6 +17,7 @@ export class SyncService {
   private readonly active = new Map<string, { controller: AbortController; promise: Promise<SyncState> }>();
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly unsubscribe: () => void;
+  private disposed = false;
 
   constructor(private readonly runtime: FeatureRuntime, protocol: SyncProtocolPort) {
     this.repository = new SyncRepository(runtime.storage);
@@ -24,18 +25,15 @@ export class SyncService {
     for (const profile of runtime.core.getProfiles()) {
       const config = this.repository.configuration(profile.id);
       if (config?.status === 'syncing') this.repository.saveConfiguration(profile.id, { ...config, status: 'paused', error: '上次同步在退出时中断，待发送队列已保留' });
+      if (config?.encryptedWords && config.status === 'ready') this.schedule(profile.id, 1000);
     }
     this.unsubscribe = runtime.syncData.subscribe((profileId, type) => {
       const config = this.repository.configuration(profileId);
       if (!config?.encryptedWords || !config.enabledTypes.includes(type)) return;
       new ChangeJournal(runtime, this.repository).capture(profileId, config.enabledTypes.filter((candidate): candidate is SyncLocalType => ['bookmarks', 'history', 'settings'].includes(candidate)));
       this.publish(profileId);
-      clearTimeout(this.timers.get(profileId));
-      this.timers.set(profileId, setTimeout(() => {
-        this.timers.delete(profileId);
-        if (this.active.has(profileId)) return;
-        void this.runProfile(profileId).catch(() => undefined);
-      }, 3000));
+      if (config.status === 'paused' || config.status === 'needs-authorization') return;
+      this.schedule(profileId, 3000);
     });
   }
 
@@ -76,6 +74,7 @@ export class SyncService {
     if (this.configuration(context.profileId).encryptedWords) throw new BrowserError('CONFLICT', '请先离开当前同步链');
     const words = createChainWords();
     this.save(context.profileId, { ...this.configuration(context.profileId), encryptedWords: this.runtime.secrets.encrypt(words), status: 'ready', officialStatus: 'unverified' });
+    this.schedule(context.profileId, 1000);
     return displayChainCode(words);
   }
   join(context: CommandContext, code: string) {
@@ -83,6 +82,7 @@ export class SyncService {
     if (this.configuration(context.profileId).encryptedWords) throw new BrowserError('CONFLICT', '请先离开当前同步链');
     const words = parseChainCode(code);
     this.save(context.profileId, { ...this.configuration(context.profileId), encryptedWords: this.runtime.secrets.encrypt(words), status: 'ready', officialStatus: 'unverified' });
+    this.schedule(context.profileId, 1000);
     return this.get(context.profileId);
   }
   showCode(context: CommandContext) {
@@ -100,6 +100,7 @@ export class SyncService {
   run(context: CommandContext) { this.assertWritable(context); return this.runProfile(context.profileId); }
   cancel(context: CommandContext) {
     this.assertWritable(context); this.active.get(context.profileId)?.controller.abort();
+    clearTimeout(this.timers.get(context.profileId)); this.timers.delete(context.profileId);
     this.save(context.profileId, { ...this.configuration(context.profileId), status: 'paused', error: undefined });
     return this.get(context.profileId);
   }
@@ -119,6 +120,7 @@ export class SyncService {
     return this.get(context.profileId);
   }
   async dispose(): Promise<void> {
+    this.disposed = true;
     this.unsubscribe();
     for (const timer of this.timers.values()) clearTimeout(timer);
     for (const current of this.active.values()) current.controller.abort();
@@ -151,7 +153,10 @@ export class SyncService {
         officialStatus: denied ? 'rejected' : this.configuration(profileId).officialStatus,
         error: cancelled ? undefined : error instanceof Error ? error.message : '同步失败',
       });
-    } finally { this.active.delete(profileId); }
+    } finally {
+      this.active.delete(profileId);
+      if (!this.disposed && this.configuration(profileId).status === 'ready') this.schedule(profileId, 60000);
+    }
     return this.get(profileId);
   }
   private configuration(profileId: string): SyncConfiguration {
@@ -170,4 +175,13 @@ export class SyncService {
     if (context.isPrivate) throw new BrowserError('FORBIDDEN', '私密窗口不加入或修改同步链');
   }
   private assertIdle(profileId: string): void { if (this.active.has(profileId)) throw new BrowserError('CONFLICT', '请先取消当前同步操作'); }
+  private schedule(profileId: string, delay: number): void {
+    if (this.disposed) return;
+    clearTimeout(this.timers.get(profileId));
+    this.timers.set(profileId, setTimeout(() => {
+      this.timers.delete(profileId);
+      if (this.active.has(profileId)) return;
+      void this.runProfile(profileId).catch(() => undefined);
+    }, delay));
+  }
 }

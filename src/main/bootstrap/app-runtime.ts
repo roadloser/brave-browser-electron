@@ -57,6 +57,7 @@ export class AppRuntime {
         credentialPreloadPath: join(app.getAppPath(), 'dist/preload/credentials.cjs'),
         translationPreloadPath: join(app.getAppPath(), 'dist/preload/translation.cjs'),
         shieldsPreloadPath: join(app.getAppPath(), 'dist/preload/shields.cjs'),
+        privacyPreloadPath: join(app.getAppPath(), 'dist/preload/privacy.cjs'),
       },
     };
     for (const profile of core.getProfiles()) storage.migrate(profile.id, migrationManifest);
