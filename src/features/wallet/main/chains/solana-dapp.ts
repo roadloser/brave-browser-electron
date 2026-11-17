@@ -20,8 +20,9 @@ export async function prepareSolanaDapp(account: WalletAccount, network: WalletN
   const connection = new Connection(network.rpcUrl, 'confirmed');
   const fee = (await connection.getFeeForMessage(message)).value;
   if (fee === null) throw new BrowserError('UNAVAILABLE', '交易区块哈希已过期或网络费不可用');
-  const programs = legacy ? legacy.instructions.map((instruction) => instruction.programId.toBase58()) :
-    message.compiledInstructions.map((instruction) => signerKeys[instruction.programIdIndex]?.toBase58() ?? '地址查找表中的程序');
+  let programs: string[];
+  if (legacy) programs = legacy.instructions.map((instruction) => instruction.programId.toBase58());
+  else programs = versioned!.message.compiledInstructions.map((instruction) => signerKeys[instruction.programIdIndex]?.toBase58() ?? '地址查找表中的程序');
   return {
     to: '多个程序调用', value: '0', fee: formatAmount(String(fee), network.decimals), expiresAt: Date.now() + 30000,
     payload: { transaction: source.transaction, versioned: Boolean(versioned) },

@@ -8,6 +8,7 @@ import { createEventPublisher } from '../ipc/event-publisher';
 import { mapError } from '../ipc/error-mapper';
 import { PageScriptHost } from '../platform/runtime/page-script-host';
 import { DebuggerHost } from '../platform/runtime/debugger-host';
+import { ContextNetwork } from '../platform/network/context-network';
 import { SecretStore } from '../platform/credentials/secret-store';
 import { NetworkPolicyCoordinator } from '../platform/network/request-policy';
 import { ElectronRequestHost } from '../platform/network/electron-request-host';
@@ -67,6 +68,7 @@ export class AppRuntime {
     const runtime: FeatureRuntime = {
       core, storage, router, publish, pages, syncData: new SyncDataCoordinator(),
       debugger: debuggerHost,
+      network: new ContextNetwork(core),
       syncTabs: {
         snapshot: profileId => core.getSyncTabs(profileId),
         subscribe: listener => core.onEvent(event => {
@@ -81,6 +83,7 @@ export class AppRuntime {
         translationPreloadPath: join(app.getAppPath(), 'dist/preload/translation.cjs'),
         shieldsPreloadPath: join(app.getAppPath(), 'dist/preload/shields.cjs'),
         privacyPreloadPath: join(app.getAppPath(), 'dist/preload/privacy.cjs'),
+        privacyServiceWorkerPreloadPath: join(app.getAppPath(), 'dist/preload/privacy-service-worker.cjs'),
         walletPreloadPath: join(app.getAppPath(), 'dist/preload/wallet.cjs'),
       },
     };

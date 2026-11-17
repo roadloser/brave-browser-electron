@@ -8,6 +8,8 @@ export const walletNetworkSchema = z.object({
   id: idSchema, chain: walletChainSchema, name: z.string().trim().min(1).max(128),
   rpcUrl: z.string().url().max(2048), chainId: z.string().max(128).optional(),
   symbol: z.string().min(1).max(16), decimals: z.number().int().min(0).max(36), testnet: z.boolean(),
+  kind: z.enum(['mainnet', 'testnet', 'preview', 'preprod']).optional(),
+  bech32Prefix: z.string().min(1).max(32).optional(),
 });
 export type WalletNetwork = z.infer<typeof walletNetworkSchema>;
 export type WalletAccount = {

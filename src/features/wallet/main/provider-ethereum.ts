@@ -9,7 +9,14 @@ export async function ethereumRequest(scope: ProviderScope, input: ProviderCall)
   const source = { origin, tabId };
   if (['eth_signTypedData', 'eth_signTypedData_v3', 'eth_signTypedData_v4'].includes(input.method)) {
     if (typeof input.params[0] !== 'string' || input.params[0].toLowerCase() !== account.address.toLowerCase()) throw new BrowserError('FORBIDDEN', '签名账户与授权不一致');
-    return approve(wallet.transactions.typedData(context, account.id, input.params[1], source));
+    const data = typeof input.params[1] === 'string' ? JSON.parse(input.params[1]) : input.params[1];
+    if (input.method === 'eth_signTypedData_v3' && data && typeof data === 'object') {
+      const types = (data as { types?: Record<string, Array<{ type?: string }>> }).types;
+      if (types && Object.values(types).some((fields) => fields.some((field) => field.type?.includes('[')))) {
+        throw new BrowserError('INVALID_ARGUMENT', 'EIP-712 v3不支持数组，请请求v4签名');
+      }
+    }
+    return approve(wallet.transactions.typedData(context, account.id, data, source));
   }
   if (['wallet_switchEthereumChain', 'wallet_addEthereumChain'].includes(input.method)) {
     const id = input.method === 'wallet_addEthereumChain' ? await wallet.networks.add(context, account.id, source, input.params[0]) :

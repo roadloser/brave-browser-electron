@@ -24,6 +24,7 @@
     "@scure/btc-signer": "2.4.1",
     "@solana/web3.js": "1.98.4",
     "@emurgo/cardano-serialization-lib-nodejs": "17.0.0",
+    "@emurgo/cardano-message-signing-nodejs": "1.1.0",
     "@polkadot/keyring": "14.0.3",
     "@polkadot/util-crypto": "14.0.3",
     "@polkadot/api": "17.0.2",

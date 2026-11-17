@@ -6,6 +6,7 @@ type MessageListener = (method: string, parameters: Record<string, unknown>, ses
 type LeaseState = { owner: DebuggerOwner; listeners: Set<MessageListener>; released: boolean };
 type DebuggerEntry = {
   contents: WebContents; leases: Set<LeaseState>; active: boolean;
+  pausedSessions: Set<string>;
   message: (event: Electron.Event, method: string, parameters: Record<string, unknown>, sessionId?: string) => void;
   detach: (event: Electron.Event, reason: string) => void;
 };
@@ -16,6 +17,7 @@ const privacyCommands = new Set([
   'Runtime.removeBinding', 'Runtime.evaluate', 'Runtime.runIfWaitingForDebugger',
   'Target.setAutoAttach', 'Target.getTargets', 'Target.attachToTarget', 'Target.detachFromTarget',
   'Storage.getStorageKey', 'Storage.getStorageKeyForFrame',
+  'Debugger.enable', 'Debugger.disable', 'Debugger.evaluateOnCallFrame', 'Debugger.resume',
 ]);
 
 export class DebuggerHost implements DebuggerHostPort {
@@ -29,8 +31,11 @@ export class DebuggerHost implements DebuggerHostPort {
       if (contents.debugger.isAttached()) throw new BrowserError('CONFLICT', '此页面调试器正被开发者工具或其他能力使用');
       contents.debugger.attach('1.3');
       const created: DebuggerEntry = {
-        contents, leases: new Set(), active: true,
+        contents, leases: new Set(), active: true, pausedSessions: new Set(),
         message: (_event, method, parameters, sessionId) => {
+          if (method === 'Debugger.paused') created.pausedSessions.add(sessionId ?? '');
+          if (method === 'Debugger.resumed') created.pausedSessions.delete(sessionId ?? '');
+          if (method === 'Target.detachedFromTarget' && typeof parameters.sessionId === 'string') created.pausedSessions.delete(parameters.sessionId);
           for (const lease of created.leases) for (const listener of lease.listeners) {
             try { listener(method, parameters, sessionId); } catch { continue; }
           }
@@ -76,8 +81,13 @@ export class DebuggerHost implements DebuggerHostPort {
       dispose: () => {
         if (lease.released) return;
         lease.released = true; lease.listeners.clear(); current.leases.delete(lease);
-        if (current.leases.size) return;
-        this.release(tabId, current);
+        if (owner === 'fingerprint-privacy' && current.active && !current.contents.isDestroyed()) {
+          const resumes = [...current.pausedSessions].map(sessionId => current.contents.debugger.sendCommand('Debugger.resume', {}, sessionId || undefined).catch(() => undefined));
+          current.pausedSessions.clear();
+          void Promise.allSettled(resumes).finally(() => {
+            if (!current.leases.size) this.release(tabId, current);
+          });
+        } else if (!current.leases.size) this.release(tabId, current);
       },
     };
   }

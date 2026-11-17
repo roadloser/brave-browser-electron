@@ -11,11 +11,16 @@ export type PrivacyCapability = {
   status: 'unknown' | 'partial' | 'blocked' | 'verified';
   implemented: boolean; observed: boolean; reason: string; evidenceId?: string;
 };
+export type RuntimeCoverage = {
+  context: ExecutionContextKind; installed: boolean; firstRead: 'guarded' | 'racy' | 'unknown';
+  reason?: string; failures: number;
+};
 export type PrivacyState = {
   mode: PrivacyMode; defaultMode: PrivacyMode; site: string | null; inherited: boolean;
   runtimeVersion: string; capabilities: PrivacyCapability[];
   scope: { profileId: string; contextId: string; site: string | null; generation: number } | null;
   revision: number;
+  coverage?: RuntimeCoverage[];
 };
 export const privacyCommandSchemas = {
   'privacy.get': z.object({ tabId: idSchema.optional() }),

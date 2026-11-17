@@ -1,7 +1,7 @@
 import type { DirectNewsFeed, NewsArticle, NewsPublisher } from '../../../../shared/contracts/content-services';
 
 export type ScopedPublisher = NewsPublisher & { defaultEnabled: boolean; locales: { locale: string; channels: string[] }[] };
-export type ScoredArticle = NewsArticle & { channels: string[]; score: number };
+export type ScoredArticle = NewsArticle & { channels: string[]; score: number; popScore?: number };
 export type NewsResult = { articles: ScoredArticle[]; etag?: string };
 export interface NewsProviderPort {
   readonly implementation: string;

@@ -65,6 +65,7 @@ export class BraveNewsAdapter implements NewsProviderPort {
         publishedAt: Number.isFinite(publishedAt) ? publishedAt : 0,
         channels: source.channels ?? (source.category ? [source.category] : []),
         score: source.score ?? 20,
+        popScore: source.pop_score ?? 0,
       });
     }
     if (!articles.length && data.length) throw new BrowserError('UNAVAILABLE', '官方新闻内容无法映射，请更新适配器');

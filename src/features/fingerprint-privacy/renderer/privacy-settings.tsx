@@ -31,7 +31,7 @@ export function PrivacySettings({ tab }: { tab?: TabSnapshot }) {
 
   return <section className="privacy-settings">
     <h1>指纹防护</h1>
-    <p className="privacy-warning">当前仅接入主页面 AudioBuffer 的部分 Brave 音频算法，尚未完成运行对照。下列能力矩阵显示实际实施范围；开启策略不代表全部指纹接口已得到保护。</p>
+    <p className="privacy-warning">当前接入部分 Brave 音频与 Canvas 像素算法，子上下文逐项适配中，尚未完成运行对照。下列能力矩阵显示实际实施范围；开启策略不代表全部指纹接口已得到保护。</p>
     {error && <p role="alert">{error}</p>}
     {!state ? <p>正在读取策略…</p> : <>
       <label className="privacy-field">默认策略<select disabled={pending} value={state.defaultMode} onChange={event => void run(() => browserClient.command('privacy.setDefault', { mode: event.target.value as PrivacyMode }))}>
