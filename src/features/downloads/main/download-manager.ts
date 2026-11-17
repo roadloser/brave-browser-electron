@@ -17,6 +17,7 @@ export class DownloadManager {
   private readonly privateRecords = new Map<string, Map<string, DownloadRecord>>();
   private readonly revisions = new Map<string, number>();
   private readonly sessions = new Map<string, () => void>();
+  private readonly endedContexts = new Set<string>();
   private readonly disposeCore: () => void;
 
   constructor(private readonly runtime: FeatureRuntime) {
@@ -97,6 +98,7 @@ export class DownloadManager {
 
   private attach(context: BrowserContext): void {
     if (this.sessions.has(context.contextId)) return;
+    this.endedContexts.delete(context.contextId);
     const browserSession = this.runtime.core.sessionForContext(context);
     const handler = (_event: Electron.Event, item: DownloadItem, contents: WebContents) => this.started(context, browserSession, item, contents);
     browserSession.on('will-download', handler);
@@ -143,17 +145,23 @@ export class DownloadManager {
     return record;
   }
   private save(context: BrowserContext, record: DownloadRecord): void {
+    if (context.isPrivate && this.endedContexts.has(context.contextId)) return;
+    try {
     if (context.isPrivate) {
       const records = this.privateRecords.get(context.contextId) ?? new Map<string, DownloadRecord>();
       records.set(record.id, { ...record }); this.privateRecords.set(context.contextId, records);
     } else this.repository.put(context.profileId, record);
     this.publish(context);
+    } catch {
+      this.runtime.publish('app.error', { code: 'STORAGE_FAILED', message: '下载记录保存失败，文件传输状态仍保留在内存中', recoverable: true }, { contextId: context.contextId });
+    }
   }
   private publish(context: BrowserContext): void {
     this.revisions.set(context.contextId, (this.revisions.get(context.contextId) ?? 0) + 1);
     this.runtime.publish('downloads.changed', this.list(context), { contextId: context.contextId });
   }
   private release(context: BrowserContext): void {
+    this.endedContexts.add(context.contextId);
     this.sessions.get(context.contextId)?.(); this.sessions.delete(context.contextId);
     for (const live of this.live.values()) if (live.context.contextId === context.contextId) live.item.cancel();
     this.privateRecords.delete(context.contextId); this.revisions.delete(context.contextId);

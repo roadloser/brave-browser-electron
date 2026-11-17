@@ -24,6 +24,10 @@ export function TabItem({ tab, currentWindow, groups, vertical = false }: {
     event.preventDefault();
     const dragged = event.dataTransfer.getData('application/x-brave-tab');
     if (!dragged || dragged === tab.id) return;
+    if (currentWindow.tabs.find((entry) => entry.id === dragged)?.pinned) {
+      void command('browser.moveTab', { tabId: dragged, index: tabIndex });
+      return;
+    }
     void command('tabGroups.moveTab', { tabId: dragged, groupId: group?.id ?? null, index: tabIndex });
   }
   function split() {

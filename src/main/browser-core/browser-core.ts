@@ -13,6 +13,8 @@ import { LayoutController } from './layout-controller';
 import { RecoveryRepository } from './recovery-repository';
 import { CoreRecovery } from './core-recovery';
 import type { SavedWindow, WindowRecord } from './core-state';
+import { AuxiliaryViewManager } from './auxiliary-view-manager';
+import type { Rectangle } from '../../shared/contracts/browser-core';
 
 export type BrowserCoreOptions = {
   storage: StorageHost; uiUrl: string; preloadPath: string;
@@ -24,6 +26,7 @@ export class BrowserCore implements BrowserCorePort {
   private readonly profiles: ProfileManager;
   private readonly events = new PageEventSource();
   private readonly sessions = new SessionRegistry(this.events);
+  private readonly auxiliaryViews = new AuxiliaryViewManager(this.sessions);
   private readonly windows: WindowManager;
   private readonly tabs: TabManager;
   private readonly navigation: NavigationController;
@@ -90,6 +93,10 @@ export class BrowserCore implements BrowserCorePort {
   }
   getNativeWindow(windowId: string) { return this.windows.get(windowId).native; }
   getTabWebContents(tabId: string) { return this.tabs.get(tabId).view.webContents; }
+  openAuxiliaryView(windowId: string, options: { kind: 'extension-popup'; url: string; bounds: Rectangle }) {
+    return this.auxiliaryViews.open(this.windows.get(windowId), options);
+  }
+  closeAuxiliaryView(viewId: string): void { this.auxiliaryViews.close(viewId); }
   sessionForContext(context: BrowserContext) { return this.sessions.get(context); }
   getContexts() { return this.sessions.contexts(); }
   getProfiles() { return this.profiles.list(); }
@@ -211,6 +218,7 @@ export class BrowserCore implements BrowserCorePort {
     this.recovery.flush();
     this.quitting = true;
     this.recovery.suspend();
+    this.auxiliaryViews.dispose();
     for (const window of [...this.windows.records.values()]) window.native.destroy();
     await this.sessions.dispose();
     this.events.dispose();
@@ -246,6 +254,7 @@ export class BrowserCore implements BrowserCorePort {
     }
   }
   private windowClosed(window: WindowRecord): void {
+    this.auxiliaryViews.closeWindow(window.id);
     for (const tabId of [...window.tabIds]) {
       if (this.tabs.records.has(tabId)) {
         this.tabs.close(window, tabId, false);

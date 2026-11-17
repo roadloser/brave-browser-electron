@@ -1,5 +1,5 @@
 import type { BrowserWindow, OnBeforeRequestListenerDetails, OnBeforeSendHeadersListenerDetails, Session, WebContents } from 'electron';
-import type { BrowserContext, BrowserSnapshot, CoreEvent, BrowserLayout, ProfileSnapshot, TabSnapshot, WindowSnapshot } from './contracts/browser-core';
+import type { BrowserContext, BrowserSnapshot, CoreEvent, BrowserLayout, ProfileSnapshot, Rectangle, TabSnapshot, WindowSnapshot } from './contracts/browser-core';
 import type { Dispose } from './contracts/envelope';
 import type { BrowserSettings } from './contracts/settings';
 
@@ -21,7 +21,7 @@ export interface StorageHost {
 }
 export type PageTarget = { tabId: string; navigationId: string; origin: string; frame?: { processId: number; routingId: number } };
 export interface PageScriptPort {
-  register(id: string, script: { world: 'isolated' | 'main'; source: (argumentsValue: unknown) => string }): Dispose;
+  register(id: string, script: { world: 'isolated' | 'main' | 'translation'; source: (argumentsValue: unknown) => string }): Dispose;
   execute<Result>(id: string, target: PageTarget, argumentsValue: unknown): Promise<Result>;
 }
 export interface SecretStorePort {
@@ -43,6 +43,8 @@ export interface BrowserCorePort {
   getWindowForSender(webContentsId: number): WindowSnapshot | undefined;
   getNativeWindow(windowId: string): BrowserWindow;
   getTabWebContents(tabId: string): WebContents;
+  openAuxiliaryView(windowId: string, options: { kind: 'extension-popup'; url: string; bounds: Rectangle }): Promise<string>;
+  closeAuxiliaryView(viewId: string): void;
   sessionForContext(context: BrowserContext): Session;
   getContexts(): BrowserContext[];
   onEvent(listener: (event: CoreEvent) => void): Dispose;

@@ -47,6 +47,10 @@ export class AppRuntime {
     const runtime: FeatureRuntime = {
       core, storage, router, publish, pages,
       secrets: new SecretStore(), requests: new ElectronRequestHost(policies),
+      assets: {
+        credentialPreloadPath: join(app.getAppPath(), 'dist/preload/credentials.cjs'),
+        translationPreloadPath: join(app.getAppPath(), 'dist/preload/translation.cjs'),
+      },
     };
     for (const profile of core.getProfiles()) storage.migrate(profile.id, migrationManifest);
     this.subscriptions.push(registerBrowserIpc(runtime));

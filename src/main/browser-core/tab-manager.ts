@@ -9,6 +9,7 @@ import { NavigationController } from './navigation-controller';
 export class TabManager {
   readonly records = new Map<string, TabRecord>();
   private readonly closed = new Map<string, SavedTab[]>();
+  private readonly closing = new Set<string>();
 
   constructor(
     private readonly sessions: SessionRegistry,
@@ -99,10 +100,13 @@ export class TabManager {
   }
 
   requestClose(window: WindowRecord, tabId: string, committed: () => void): void {
+    if (this.closing.has(tabId)) return;
+    this.closing.add(tabId);
     const tab = this.get(tabId);
     const saved = this.save(tabId);
     const contents = tab.view.webContents;
     const closed = () => {
+      this.closing.delete(tabId);
       const history = this.closed.get(window.id) ?? [];
       history.unshift(saved);
       this.closed.set(window.id, history.slice(0, 25));
@@ -111,7 +115,10 @@ export class TabManager {
     };
     contents.once('destroyed', closed);
     contents.close({ waitForBeforeUnload: true });
-    setTimeout(() => { if (!contents.isDestroyed()) contents.removeListener('destroyed', closed); }, 30000);
+    setTimeout(() => {
+      if (!contents.isDestroyed()) contents.removeListener('destroyed', closed);
+      this.closing.delete(tabId);
+    }, 30000);
   }
 
   move(window: WindowRecord, tabId: string, index: number): void {

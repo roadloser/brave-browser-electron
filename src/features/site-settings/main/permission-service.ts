@@ -1,4 +1,4 @@
-import { systemPreferences, type WebContents } from 'electron';
+import { BrowserWindow, systemPreferences, type WebContents } from 'electron';
 import { randomUUID } from 'node:crypto';
 import type { BrowserContext } from '../../../shared/contracts/browser-core';
 import type { PermissionPrompt, SitePermission, SiteSettingsState } from '../../../shared/contracts/site-settings';
@@ -127,7 +127,7 @@ export class PermissionService {
   }
   private knownWindows(context: BrowserContext) {
     const windows = new Map<string, ReturnType<FeatureRuntime['core']['getWindow']>>();
-    for (const nativeWindow of requireWindows()) {
+    for (const nativeWindow of BrowserWindow.getAllWindows()) {
       const mapped = this.runtime.core.getWindowForSender(nativeWindow.webContents.id);
       if (mapped?.contextId === context.contextId) windows.set(mapped.id, mapped);
     }
@@ -152,5 +152,3 @@ export class PermissionService {
     this.sessions.get(context.contextId)?.(); this.sessions.delete(context.contextId); this.repository.release(context.contextId);
   }
 }
-import { BrowserWindow } from 'electron';
-function requireWindows() { return BrowserWindow.getAllWindows(); }

@@ -18,6 +18,8 @@ export type ExtensionsState = {
 export const extensionsCommandSchemas = {
   'extensions.get': z.object({}),
   'extensions.chooseDirectory': z.object({}),
+  'extensions.proposeStoreInstall': z.object({ extensionId: z.string().regex(/^[a-p]{32}$/) }),
+  'extensions.proposeUpdate': z.object({ id: idSchema }),
   'extensions.confirmInstall': z.object({ proposalId: idSchema, approve: z.boolean() }),
   'extensions.setEnabled': z.object({ id: idSchema, enabled: z.boolean() }),
   'extensions.remove': z.object({ id: idSchema }),
@@ -28,6 +30,8 @@ export const extensionsCommandSchemas = {
 export interface ExtensionsCommandResults {
   'extensions.get': ExtensionsState;
   'extensions.chooseDirectory': ExtensionInstallProposal | null;
+  'extensions.proposeStoreInstall': ExtensionInstallProposal;
+  'extensions.proposeUpdate': ExtensionInstallProposal;
   'extensions.confirmInstall': ExtensionsState;
   'extensions.setEnabled': ExtensionsState;
   'extensions.remove': ExtensionsState;

@@ -18,7 +18,7 @@ export async function chooseBackground(window: BrowserWindow) {
   const image = nativeImage.createFromBuffer(await readFile(path));
   if (image.isEmpty()) throw new BrowserError('INVALID_ARGUMENT', '无法读取这张图片，请换用 PNG、JPEG 或 WebP');
   const size = image.getSize();
-  const width = Math.min(size.width, 3840);
-  const resized = width < size.width ? image.resize({ width, quality: 'best' }) : image;
+  const scale = Math.min(1, 3840 / Math.max(size.width, size.height));
+  const resized = scale < 1 ? image.resize({ width: Math.round(size.width * scale), height: Math.round(size.height * scale), quality: 'best' }) : image;
   return { id: randomUUID(), name: basename(path), dataUrl: `data:image/jpeg;base64,${resized.toJPEG(86).toString('base64')}` };
 }

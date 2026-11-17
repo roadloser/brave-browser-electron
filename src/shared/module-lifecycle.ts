@@ -17,6 +17,7 @@ export interface FeatureRuntime {
   pages: PageScriptPort;
   secrets: SecretStorePort;
   requests: RequestHostPort;
+  assets: { credentialPreloadPath: string; translationPreloadPath: string };
   publish<Name extends EventName>(event: Name, data: BrowserEvents[Name], audience: EventAudience): void;
 }
 export type FeatureRegistration = { id: string; dispose: () => void | Promise<void> };

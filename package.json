@@ -11,15 +11,19 @@
   },
   "scripts": {
     "dev": "node scripts/dev.mjs",
-    "build": "vite build --config vite.main.config.ts && vite build --config vite.preload.config.ts && vite build --config vite.config.ts",
+    "build": "vite build --config vite.main.config.ts && vite build --config vite.preload.config.ts && vite build --config vite.credentials.config.ts && vite build --config vite.translation.config.ts && vite build --config vite.config.ts",
     "start": "electron .",
     "package": "electron-builder --config electron-builder.yml"
   },
   "dependencies": {
     "@mozilla/readability": "0.6.0",
+    "@ghostery/adblocker-electron": "2.20.3",
+    "@ghostery/adblocker": "2.20.3",
     "@base-ui/react": "1.4.1",
     "better-sqlite3": "13.0.2",
     "dompurify": "3.4.17",
+    "electron-chrome-extensions": "4.10.0",
+    "electron-chrome-web-store": "0.13.0",
     "lucide-react": "0.577.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
