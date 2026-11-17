@@ -19,8 +19,12 @@ export class WalletStateStore {
     if (existing) { existing.context = context; return existing; }
     const stored = new WalletRepository(this.runtime.storage.open(context.profileId)).read();
     const document: WalletDocument = stored ? structuredClone(stored) : {
-      accounts: [], networks: structuredClone(defaultNetworks), requests: [], transactions: [], grants: {}, pending: {}, revision: 0,
+      accounts: [], networks: structuredClone(defaultNetworks), requests: [], transactions: [], grants: {}, pending: {}, bitcoinAccounts: {}, revision: 0,
     };
+    document.bitcoinAccounts ??= {};
+    for (const account of document.accounts) if (account.discovery?.status === 'scanning') {
+      account.discovery = { ...account.discovery, status: 'idle', error: '上次地址发现已中断，请刷新继续' };
+    }
     if (context.isPrivate) { document.requests = []; document.transactions = []; document.grants = {}; document.pending = {}; }
     for (const request of document.requests) if (request.status === 'pending') { request.status = 'cancelled'; request.error = '应用重新启动，待确认请求已取消'; }
     document.pending = {};

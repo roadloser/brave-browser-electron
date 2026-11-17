@@ -1,5 +1,6 @@
 import type { WalletNetwork } from '../../../../shared/contracts/wallet';
 import { networkFetch } from './network-client';
+import { BrowserError } from '../../../../shared/errors';
 
 export type CardanoUtxo = { tx_hash: string; output_index: number; address: string; amount: { unit: string; quantity: string }[] };
 export type CardanoParameters = { min_fee_a: number; min_fee_b: number; key_deposit: string; pool_deposit: string; max_tx_size: number; max_val_size: string | number; coins_per_utxo_size: string };
@@ -11,12 +12,23 @@ export class CardanoRpc {
   }
   async utxos(address: string) {
     const records: CardanoUtxo[] = [];
-    for (let page = 1; page <= 50; page++) {
-      const batch = await this.json<CardanoUtxo[]>(`addresses/${encodeURIComponent(address)}/utxos?count=100&page=${page}`);
+    const seen = new Set<string>();
+    for (let page = 1; ; page++) {
+      let batch: CardanoUtxo[];
+      try { batch = await this.json<CardanoUtxo[]>(`addresses/${encodeURIComponent(address)}/utxos?count=100&page=${page}`); }
+      catch (error) {
+        if (error instanceof BrowserError && error.details?.status === 404) return records;
+        throw error;
+      }
+      if (!Array.isArray(batch)) throw new BrowserError('UNAVAILABLE', 'Cardano UTXO响应格式无效');
+      for (const utxo of batch) {
+        const id = `${utxo.tx_hash}:${utxo.output_index}`;
+        if (seen.has(id)) throw new BrowserError('UNAVAILABLE', 'Cardano分页重复，未把不完整结果视为余额');
+        seen.add(id);
+      }
       records.push(...batch);
       if (batch.length < 100) return records;
     }
-    throw new Error('账户 UTXO 超过当前批次限制，请分批整理后重试');
   }
   async submit(bytes: Uint8Array) {
     const response = await networkFetch(this.url('tx/submit'), { method: 'POST',

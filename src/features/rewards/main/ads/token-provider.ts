@@ -25,7 +25,9 @@ export class BraveAdsTokenProvider implements AdsTokenProviderPort {
     };
     const response = await fetch(this.url(endpoint, paymentId), { method: 'POST', headers, body: content, signal, redirect: 'error' });
     const body = await this.body(response);
-    return z.object({ nonce: z.string().min(1).max(256) }).parse(body).nonce;
+    const result = z.object({ nonce: z.string().min(1).max(256), isEligible: z.boolean().optional() }).parse(body);
+    if (result.isEligible === false) throw new BrowserError('FORBIDDEN', '广告token服务返回当前钱包无资格，已停止请求');
+    return result.nonce;
   }
 
   async fetch(endpoint: string, paymentId: string, nonce: string, signal: AbortSignal): Promise<SignedTokenBatch> {

@@ -55,6 +55,9 @@ export function WalletPanel({ state, open, onOpenChange, onState, error, onError
                   <div className="wallet-address"><span title={account.address}>{account.address}</span>
                     <IconButton label="复制公开地址" onClick={() => navigator.clipboard.writeText(account.address).catch((failure) => onError(String(failure)))}><Copy size={14} /></IconButton></div>
                   {balance?.error && <ErrorNotice message={balance.error} />}
+                  {account.discovery?.status === 'scanning' && <p className="wallet-detail">正在扫描接收与找零地址…</p>}
+                  {account.discovery?.error && <ErrorNotice message={account.discovery.error} />}
+                  {account.receiveIndex !== undefined && <p className="wallet-detail">接收地址 #{account.receiveIndex} · 找零地址 #{account.changeIndex ?? 0}</p>}
                   <div className="wallet-quick-actions">
                     <button className="button button-primary" type="button" disabled={!capability?.transfer} onClick={() => setTransfer(true)}><ArrowUpRight size={16} />发送</button>
                     <button className="button" type="button" disabled={refreshing} onClick={async () => {

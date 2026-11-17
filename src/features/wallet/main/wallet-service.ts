@@ -7,11 +7,13 @@ import { WalletStateStore } from './wallet-state';
 import { VaultCommands } from './vault-commands';
 import { TransactionController } from './transaction-controller';
 import { formatAmount, safeNetworkUrl } from './chains/network-client';
+import { AccountDiscovery } from './account-discovery';
 
 export class WalletService {
   readonly chains = new ChainRegistry();
   readonly store: WalletStateStore;
   readonly transactions: TransactionController;
+  private readonly discovery: AccountDiscovery;
   private readonly vault: VaultCommands;
   private readonly release: () => void;
   private readonly settlements = new Map<string, { resolve: (value: string) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
@@ -20,10 +22,12 @@ export class WalletService {
   constructor(private readonly runtime: FeatureRuntime) {
     this.store = new WalletStateStore(runtime, (context) => this.onLock(context));
     this.vault = new VaultCommands(runtime, this.store);
-    this.transactions = new TransactionController(this.store, this.chains, (context) => this.publish(context));
+    this.discovery = new AccountDiscovery(this.store, this.chains, (context) => this.publish(context));
+    this.transactions = new TransactionController(this.store, this.chains, (context) => this.publish(context), (context, accountId) => this.discovery.refresh(context, accountId));
     this.release = runtime.core.onEvent((event) => {
       if (event.type === 'contextDisposed') {
         const context: CommandContext = { ...event.context, windowId: '', requestId: '' };
+        this.discovery.cancelContext(context);
         if (this.store.exists(context)) this.onLock(context);
         this.store.close(context);
       }
@@ -125,6 +129,10 @@ export class WalletService {
     for (const account of session.document.accounts.filter((entry) => !accountId || entry.id === accountId)) {
       const network = session.document.networks.find((entry) => entry.id === account.networkId)!;
       try {
+        if (account.chain === 'bitcoin') {
+          await this.discovery.refresh(context, account.id);
+          continue;
+        }
         const value = await this.chains.get(account.chain).balance(account, network);
         if (!this.store.exists(context)) throw new BrowserError('CANCELLED', '资料已关闭');
         session.balances[account.id] = { value, formatted: `${formatAmount(value, network.decimals)} ${network.symbol}`, updatedAt: Date.now() };
@@ -182,7 +190,7 @@ export class WalletService {
   async dispose() {
     this.release();
     for (const id of this.settlements.keys()) this.settle(id, undefined, new BrowserError('CANCELLED', '钱包已退出'));
-    this.store.dispose(); this.listeners.clear(); await this.chains.dispose();
+    this.discovery.dispose(); this.store.dispose(); this.listeners.clear(); await this.chains.dispose();
   }
   private settle(id: string, result?: string, error?: Error) {
     const pending = this.settlements.get(id);
@@ -191,6 +199,7 @@ export class WalletService {
     if (error) pending.reject(error); else pending.resolve(result!);
   }
   private onLock(context: CommandContext) {
+    this.discovery?.cancelContext(context);
     if (!this.store.exists(context)) return;
     const requests = this.store.get(context).document.requests.filter((request) => request.status === 'pending');
     this.store.update(context, (document) => {

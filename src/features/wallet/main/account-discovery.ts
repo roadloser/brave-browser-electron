@@ -1,4 +1,4 @@
-import type { CommandContext, FeatureRuntime } from '../../../shared/module-lifecycle';
+import type { CommandContext } from '../../../shared/module-lifecycle';
 import { BrowserError } from '../../../shared/errors';
 import type { WalletStateStore } from './wallet-state';
 import type { ChainRegistry } from './chain-registry';
@@ -6,7 +6,7 @@ import { formatAmount } from './chains/network-client';
 
 export class AccountDiscovery {
   private readonly operations = new Map<string, AbortController>();
-  constructor(private readonly runtime: FeatureRuntime, private readonly store: WalletStateStore, private readonly chains: ChainRegistry) {}
+  constructor(private readonly store: WalletStateStore, private readonly chains: ChainRegistry, private readonly publish: (context: CommandContext) => void) {}
 
   async refresh(context: CommandContext, accountId: string) {
     const session = this.store.get(context);
@@ -28,7 +28,7 @@ export class AccountDiscovery {
       }
       this.store.update(context, (document) => {
         const target = document.accounts.find((entry) => entry.id === accountId)!;
-        target.discovery = { status: 'scanning', scannedAt: publicAccount!.lastScannedAt };
+        target.discovery = { status: 'scanning', scannedAt: publicAccount!.lastScannedAt ?? undefined };
       });
       this.publish(context);
       if (!adapter.discover) throw new BrowserError('UNAVAILABLE', 'Bitcoin 地址发现未接入');
@@ -40,7 +40,7 @@ export class AccountDiscovery {
         target.address = result.receiveAddress;
         target.receiveIndex = result.state.nextReceiveIndex;
         target.changeIndex = result.state.nextChangeIndex;
-        target.discovery = { status: 'ready', scannedAt: result.state.lastScannedAt };
+        target.discovery = { status: 'ready', scannedAt: result.state.lastScannedAt ?? undefined };
       });
       session.balances[accountId] = { value: result.balance, formatted: `${formatAmount(result.balance, network.decimals)} ${network.symbol}`, updatedAt: Date.now() };
       this.publish(context);
@@ -49,8 +49,8 @@ export class AccountDiscovery {
       if (this.store.exists(context) && this.operations.get(operationKey) === controller) {
         this.store.update(context, (document) => {
           const target = document.accounts.find((entry) => entry.id === accountId);
-          if (target) target.discovery = { status: controller.signal.aborted ? 'cancelled' : 'failed',
-            scannedAt: publicAccount?.lastScannedAt ?? null, error: error instanceof Error ? error.message : '地址发现失败' };
+          if (target) target.discovery = { status: controller.signal.aborted ? 'idle' : 'failed',
+            scannedAt: publicAccount?.lastScannedAt ?? undefined, error: error instanceof Error ? error.message : '地址发现失败' };
         });
         this.publish(context);
       }
@@ -64,13 +64,4 @@ export class AccountDiscovery {
     for (const [key, controller] of this.operations) if (key.startsWith(prefix)) controller.abort();
   }
   dispose() { this.operations.forEach((controller) => controller.abort()); this.operations.clear(); }
-  private publish(context: CommandContext) {
-    this.runtime.publish('wallet.changed', {
-      initialized: Boolean(this.store.get(context).document.vault), locked: !this.store.get(context).keyring.unlocked,
-      accounts: structuredClone(this.store.get(context).document.accounts), networks: structuredClone(this.store.get(context).document.networks),
-      selectedAccountId: this.store.get(context).document.selectedAccountId, capabilities: this.chains.capabilities(),
-      requests: structuredClone(this.store.get(context).document.requests), transactions: structuredClone(this.store.get(context).document.transactions),
-      balances: structuredClone(this.store.get(context).balances), revision: this.store.get(context).document.revision,
-    }, context.isPrivate ? { contextId: context.contextId } : { profileId: context.profileId });
-  }
 }

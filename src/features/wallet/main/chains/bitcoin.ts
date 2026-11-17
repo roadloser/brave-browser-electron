@@ -5,6 +5,7 @@ import type { WalletAccount, WalletNetwork } from '../../../../shared/contracts/
 import { BrowserError } from '../../../../shared/errors';
 import type { ChainAdapterPort, KeyMaterial, PreparedTransfer, SignedTransfer, TransferIntent } from './adapter';
 import { amountToBase, formatAmount, networkFetch } from './network-client';
+import { discoverBitcoin, type BitcoinDiscovery, type BitcoinPublicAccount } from './bitcoin-discovery';
 
 type Utxo = { txid: string; vout: number; value: number; status: { confirmed: boolean } };
 type BitcoinPayload = { psbt: string; paths: string[] };
@@ -13,7 +14,8 @@ export class BitcoinAdapter implements ChainAdapterPort {
   readonly chain = 'bitcoin' as const;
   readonly version = 'scure-btc-signer-2.4.1/bip84';
   readonly capability = { chain: this.chain, account: true, transfer: true, messageSign: false, dapp: false, shielded: false,
-    reason: '独立地址资金可用；完整地址发现与 PSBT 站点协议仍需对应适配' };
+    reason: '接收/找零采用 gap 20 地址发现；BIP-322 与站点 PSBT 待接入' };
+  private readonly discovered = new Map<string, BitcoinDiscovery>();
   private root(key: KeyMaterial, network: WalletNetwork) {
     const seed = mnemonicToSeedSync(key.mnemonic);
     try { return HDKey.fromMasterSeed(seed).derive(`m/84'/${network.testnet ? 1 : 0}'/${key.index}'`); }
@@ -25,35 +27,53 @@ export class BitcoinAdapter implements ChainAdapterPort {
     try { return btc.p2wpkh(root.deriveChild(0).deriveChild(0).publicKey!, this.network(network)).address!; }
     finally { root.wipePrivateData(); }
   }
-  async balance(account: WalletAccount, network: WalletNetwork) {
-    const response = await networkFetch(`${network.rpcUrl.replace(/\/$/, '')}/address/${encodeURIComponent(account.address)}`);
-    const data = await response.json() as { chain_stats: { funded_txo_sum: number; spent_txo_sum: number }; mempool_stats: { funded_txo_sum: number; spent_txo_sum: number } };
-    return String(BigInt(data.chain_stats.funded_txo_sum) - BigInt(data.chain_stats.spent_txo_sum) + BigInt(data.mempool_stats.funded_txo_sum) - BigInt(data.mempool_stats.spent_txo_sum));
+  async initializeDiscovery(key: KeyMaterial, network: WalletNetwork): Promise<BitcoinPublicAccount> {
+    const root = this.root(key, network);
+    try { return { version: 1, xpub: root.publicExtendedKey, nextReceiveIndex: 0, nextChangeIndex: 0, lastScannedAt: null }; }
+    finally { root.wipePrivateData(); }
+  }
+  async discover(account: WalletAccount, network: WalletNetwork, state: BitcoinPublicAccount, signal?: AbortSignal) {
+    const result = await discoverBitcoin(state, network, signal);
+    this.discovered.set(account.id, result);
+    return result;
+  }
+  async balance(account: WalletAccount, _network: WalletNetwork) {
+    const discovered = this.discovered.get(account.id);
+    if (!discovered) throw new BrowserError('UNAVAILABLE', '先完成账户地址发现再读取余额');
+    return discovered.balance;
   }
   async prepare(key: KeyMaterial, account: WalletAccount, network: WalletNetwork, intent: TransferIntent): Promise<PreparedTransfer> {
     const root = this.root(key, network);
     try {
-      const paymentKey = root.deriveChild(0).deriveChild(0);
-      const spend = btc.p2wpkh(paymentKey.publicKey!, this.network(network));
-      if (spend.address !== account.address) throw new BrowserError('CONFLICT', '账户地址与派生路径不一致');
+      const discovered = this.discovered.get(account.id);
+      if (!discovered || Date.now() - (discovered.state.lastScannedAt ?? 0) > 60000) throw new BrowserError('CONFLICT', '地址发现数据已过期，请刷新后重试');
       const endpoint = network.rpcUrl.replace(/\/$/, '');
-      const [utxoResponse, feeResponse] = await Promise.all([
-        networkFetch(`${endpoint}/address/${account.address}/utxo`), networkFetch(`${endpoint}/fee-estimates`),
-      ]);
-      const utxos = await utxoResponse.json() as Utxo[];
+      const feeResponse = await networkFetch(`${endpoint}/fee-estimates`);
       const estimates = await feeResponse.json() as Record<string, number>;
       const feePerByte = BigInt(Math.max(1, Math.ceil(estimates['6'] ?? estimates['3'] ?? 2)));
-      const selected = btc.selectUTXO(utxos.filter((entry) => entry.status.confirmed).map((entry) => ({
-        ...spend, txid: entry.txid, index: entry.vout,
-        witnessUtxo: { script: spend.script, amount: BigInt(entry.value) },
-      })), [{ address: intent.to, amount: amountToBase(intent.value, network.decimals) }], 'default', {
-        changeAddress: account.address, feePerByte, bip69: true, createTx: true, network: this.network(network),
+      const inputs: Array<{ txid: string; index: number; witnessUtxo: { script: Uint8Array; amount: bigint } }> = [];
+      for (const address of discovered.addresses.filter((entry) => entry.used)) {
+        const response = await networkFetch(`${endpoint}/address/${address.address}/utxo`);
+        const utxos = await response.json() as Utxo[];
+        for (const utxo of utxos.filter((entry) => entry.status.confirmed)) {
+          inputs.push({ txid: utxo.txid, index: utxo.vout, witnessUtxo: { script: address.script, amount: BigInt(utxo.value) } });
+        }
+      }
+      const selected = btc.selectUTXO(inputs, [{ address: intent.to, amount: amountToBase(intent.value, network.decimals) }], 'default', {
+        changeAddress: discovered.changeAddress, feePerByte, bip69: true, createTx: true, network: this.network(network),
       });
       if (!selected?.tx) throw new BrowserError('CONFLICT', '已确认余额不足以支付金额与网络费');
+      const paths = new Set<string>();
+      for (let index = 0; index < selected.tx.inputsLength; index++) {
+        const script = selected.tx.getInput(index).witnessUtxo?.script;
+        const address = discovered.addresses.find((entry) => script && Buffer.from(entry.script).equals(Buffer.from(script)));
+        if (!address) throw new BrowserError('CONFLICT', '选中的UTXO不属于当前账户');
+        paths.add(`m/${address.branch}/${address.index}`);
+      }
       const fee = formatAmount(selected.fee.toString(), network.decimals);
       return { to: intent.to, value: intent.value, fee, expiresAt: Date.now() + 120000,
-        payload: { psbt: Buffer.from(selected.tx.toPSBT()).toString('base64'), paths: ['m/0/0'] } satisfies BitcoinPayload,
-        details: { recipient: intent.to, value: `${intent.value} ${network.symbol}`, networkFee: `${fee} ${network.symbol}`, feeRate: `${feePerByte} sat/vB`, changeAddress: account.address } };
+        payload: { psbt: Buffer.from(selected.tx.toPSBT()).toString('base64'), paths: [...paths] } satisfies BitcoinPayload,
+        details: { recipient: intent.to, value: `${intent.value} ${network.symbol}`, networkFee: `${fee} ${network.symbol}`, feeRate: `${feePerByte} sat/vB`, changeAddress: discovered.changeAddress } };
     } finally { root.wipePrivateData(); }
   }
   async sign(key: KeyMaterial, network: WalletNetwork, prepared: PreparedTransfer) {
@@ -80,5 +100,5 @@ export class BitcoinAdapter implements ChainAdapterPort {
       return (await response.json() as { confirmed: boolean }).confirmed ? 'confirmed' as const : 'pending' as const;
     } catch { return 'unknown' as const; }
   }
-  dispose() {}
+  dispose() { this.discovered.clear(); }
 }

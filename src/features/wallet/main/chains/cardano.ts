@@ -11,7 +11,7 @@ export class CardanoAdapter implements ChainAdapterPort {
   readonly chain = 'cardano' as const;
   readonly version = 'cardano-serialization-lib-17.0.0/cip1852';
   readonly capability = { chain: this.chain, account: true, transfer: true, messageSign: true, dapp: false, shielded: false,
-    reason: 'CIP-30站点协议与账户地址发现仍需完整映射；当前签名为明确原始消息签名' };
+    reason: '按当前 Brave 使用单一外部地址兼作找零；CIP-30 站点协议正在映射' };
   private account(key: KeyMaterial) {
     const entropy = mnemonicToEntropy(key.mnemonic, wordlist);
     try { return Cardano.Bip32PrivateKey.from_bip39_entropy(entropy, new Uint8Array()).derive(0x80000000 + 1852).derive(0x80000000 + 1815).derive(0x80000000 + key.index); }

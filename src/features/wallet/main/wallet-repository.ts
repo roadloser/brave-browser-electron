@@ -14,6 +14,15 @@ export type WalletDocument = {
 export const walletMigrations: readonly Migration[] = [{
   id: 'wallet', version: 1,
   up(database) { database.exec('CREATE TABLE IF NOT EXISTS wallet_document (id INTEGER PRIMARY KEY CHECK(id = 1), document TEXT NOT NULL)'); },
+}, {
+  id: 'wallet', version: 2,
+  up(database) {
+    const row = database.get<{ document: string }>('SELECT document FROM wallet_document WHERE id = 1');
+    if (!row) return;
+    const document = JSON.parse(row.document) as WalletDocument;
+    document.bitcoinAccounts ??= {};
+    database.run('UPDATE wallet_document SET document = ? WHERE id = 1', [JSON.stringify(document)]);
+  },
 }];
 export class WalletRepository {
   constructor(private readonly database: ProfileDatabase) {}

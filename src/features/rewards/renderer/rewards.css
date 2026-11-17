@@ -10,6 +10,7 @@
 .rewards-status-grid article { border: 1px solid var(--color-border); border-radius: 12px; padding: 16px; overflow-wrap: anywhere; }
 .rewards-status-grid small { color: var(--color-muted); line-height: 1.7; }
 .rewards-panel input { padding: 9px 12px; border: 1px solid var(--color-border); border-radius: 8px; color: inherit; background: var(--color-surface); font: inherit; }
+.rewards-panel textarea { padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 8px; color: inherit; background: var(--color-surface); font: inherit; resize: vertical; }
 .rewards-panel button, .rewards-confirm button { padding: 9px 13px; border: 1px solid var(--color-border); border-radius: 8px; font: inherit; background: var(--color-surface); color: var(--color-text); cursor: pointer; }
 .rewards-panel button:disabled { opacity: .5; cursor: default; }
 .rewards-actions { display: flex; gap: 14px; align-items: end; margin: 24px 0; }

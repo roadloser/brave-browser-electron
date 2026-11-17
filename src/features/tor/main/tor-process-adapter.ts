@@ -16,6 +16,7 @@ export class TorProcessAdapter implements TorRuntimePort {
   constructor(private readonly failed: (reason: string) => void) {}
   async start(component: TorComponent, signal: AbortSignal): Promise<TorEndpoint> {
     const checked = await readTorComponent(component.directory);
+    signal.throwIfAborted();
     if (checked.manifestHash !== component.manifestHash || checked.version !== component.version) throw new BrowserError('CONFLICT', 'Tor 组件已变化，请重新选择并确认完整性');
     this.stopping = false;
     const directory = await mkdtemp(join(tmpdir(), 'brave-electron-tor-'));

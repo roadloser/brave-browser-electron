@@ -7,8 +7,10 @@ import type { ChainRegistry } from './chain-registry';
 
 export class TransactionController {
   private readonly validators = new Map<string, () => boolean>();
-  constructor(private readonly store: WalletStateStore, private readonly chains: ChainRegistry, private readonly publish: (context: CommandContext) => void) {}
+  constructor(private readonly store: WalletStateStore, private readonly chains: ChainRegistry, private readonly publish: (context: CommandContext) => void,
+    private readonly discover: (context: CommandContext, accountId: string) => Promise<unknown>) {}
   async transfer(context: CommandContext, accountId: string, to: string, value: string, source?: { origin: string; tabId: string }) {
+    await this.discover(context, accountId);
     const session = this.store.get(context);
     const account = session.document.accounts.find((entry) => entry.id === accountId);
     if (!account) throw new BrowserError('NOT_FOUND', '账户不存在');

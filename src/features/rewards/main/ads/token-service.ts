@@ -32,7 +32,7 @@ export class AdsTokenService {
       tokenCount: repository.count(),
       tokenStatus: this.running.has(profileId) ? pending?.nonce ? 'awaiting-signature' : 'requesting'
         : pending?.status === 'failed' ? 'failed' : repository.count() > 0 ? 'ready' : 'empty',
-      error: pending?.error,
+      error: pending?.error ?? (pending && !this.running.has(profileId) ? '上次token批次尚未完成，重新请求将凭已保存nonce继续；没有nonce时保留未知结果' : undefined),
     };
   }
 
