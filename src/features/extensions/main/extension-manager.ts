@@ -21,6 +21,7 @@ export class ExtensionManager {
   private readonly starting = new Map<string, Promise<void>>();
   private readonly queues = new Map<string, Promise<unknown>>();
   private readonly storePages = new Map<string, ChromeStorePageAdapter>();
+  private readonly actionReleases = new Map<string, () => void>();
   private readonly stopCore;
   private latestState?: BrowserSnapshot;
   private readonly knownWindows = new Map<string, BrowserSnapshot['windows'][number]>();
@@ -59,6 +60,11 @@ export class ExtensionManager {
   async get(context: CommandContext): Promise<ExtensionsState> {
     if (!context.isPrivate) await this.ensure(context);
     return this.state(context.profileId, context.isPrivate);
+  }
+
+  async actionAdapter(context: CommandContext): Promise<ExtensionLibraryPort> {
+    this.regular(context); await this.ensure(context);
+    return this.adapters.get(context.profileId)!;
   }
 
   async chooseDirectory(context: CommandContext) { this.regular(context); await this.ensure(context); return this.proposals.chooseDirectory(context); }
@@ -167,6 +173,8 @@ export class ExtensionManager {
     this.popup.dispose();
     await Promise.allSettled([...this.queues.values(), ...this.starting.values()]);
     for (const adapter of this.adapters.values()) adapter.dispose();
+    for (const release of this.actionReleases.values()) release();
+    this.actionReleases.clear();
     for (const page of this.storePages.values()) page.dispose();
     this.storePages.clear();
     this.adapters.clear();
@@ -186,6 +194,9 @@ export class ExtensionManager {
     if (this.disposed) return;
     const adapter = new ExtensionLibraryAdapter(this.runtime, context, this.popup);
     this.adapters.set(context.profileId, adapter);
+    this.actionReleases.set(context.profileId, adapter.onActionsChanged(revision => {
+      if (!this.disposed) this.runtime.publish('extensions.actionsChanged', { revision }, { profileId: context.profileId });
+    }));
     if (this.latestState) adapter.synchronize(this.latestState);
     await this.installer(context).recover();
     const repository = this.repository(context.profileId);
