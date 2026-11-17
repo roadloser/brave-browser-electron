@@ -43,6 +43,7 @@
     "ed25519-hd-key": "2.0.0",
     "tweetnacl": "1.0.3",
     "protobufjs": "8.8.1",
+    "plist": "5.1.1",
     "rss-parser": "3.13.0",
     "tldts-experimental": "7.4.10",
     "lucide-react": "0.577.0",

@@ -12,6 +12,7 @@ import { ShieldsPanel } from '../features/shields/renderer/shields-panel';
 import { TalkButton } from '../features/content-services/renderer/talk-panel';
 import { WalletButton } from '../features/wallet/renderer/wallet-button';
 import { TorButton } from '../features/tor/renderer/tor-status';
+import { VpnButton } from '../features/vpn/renderer/vpn-button';
 
 function useActiveTab() {
   const snapshot = useBrowserStore(state => state.snapshot);
@@ -43,5 +44,5 @@ export function FeatureNotifications() {
 }
 
 export function FeatureSidebar() {
-  return <><TalkButton /><TorButton /></>;
+  return <><TalkButton /><TorButton /><VpnButton /></>;
 }
