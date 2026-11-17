@@ -12,6 +12,7 @@ import { CdpPrivacyContextAdapter } from '../runtime/cdp-context-adapter';
 import { capabilityWithOutcome, coverageFromOutcomes } from './runtime-coverage';
 import { chromiumNonceHash } from './chromium-nonce-hash';
 import { CoverageLedger } from './coverage-ledger';
+import { PrivacyRuntimeRegistry } from './runtime-registry';
 
 export class PrivacyService {
   private readonly tokens: FarblingTokenProviderPort;
@@ -19,7 +20,7 @@ export class PrivacyService {
   private readonly tabs = new Map<string, TabSnapshot>();
   private readonly stopCore;
   private readonly stopPreparation;
-  private readonly cdpContexts = new Map<string, CdpPrivacyContextAdapter>();
+  private readonly cdpContexts = new PrivacyRuntimeRegistry();
   private readonly cdpOutcomes = new Map<string, CoverageLedger>();
   private readonly generation = Date.now();
   private revision = 0;
@@ -29,7 +30,7 @@ export class PrivacyService {
     this.stopCore = runtime.core.onEvent(event => {
       if (event.type === 'stateChanged') this.acceptState(event.state);
       if (event.type === 'zoomChanged') {
-        void this.cdpContexts.get(event.tabId)?.updateZoom(event.factor).catch(error => {
+        void this.cdpContexts.current(event.tabId)?.updateZoom(event.factor).catch(error => {
           const outcomes = this.cdpOutcomes.get(event.tabId) ?? new CoverageLedger();
           outcomes.update({ type: 'record', outcome: { identity: 'root:zoom', context: 'window', applied: false, firstRead: 'unknown', reason: error instanceof Error ? error.message : '缩放策略更新失败' } });
           this.cdpOutcomes.set(event.tabId, outcomes);
@@ -38,11 +39,13 @@ export class PrivacyService {
       }
       if (event.type === 'tabClosed') {
         this.tabs.delete(event.tabId);
-        this.cdpContexts.get(event.tabId)?.dispose(); this.cdpContexts.delete(event.tabId); this.cdpOutcomes.delete(event.tabId);
+        this.cdpContexts.release(event.tabId); this.cdpOutcomes.delete(event.tabId);
       }
       if (event.type === 'contextDisposed' && event.context.isPrivate) {
         this.privateModes.delete(event.context.contextId); this.tokens.release(event.context.contextId);
-        for (const [tabId, tab] of this.tabs) if (tab.contextId === event.context.contextId) this.tabs.delete(tabId);
+        for (const [tabId, tab] of this.tabs) if (tab.contextId === event.context.contextId) {
+          this.cdpContexts.release(tabId); this.cdpOutcomes.delete(tabId); this.tabs.delete(tabId);
+        }
       }
     });
     this.stopPreparation = runtime.core.registerBeforeNavigate('fingerprint-context', tab => this.prepareContext(tab));
@@ -88,8 +91,7 @@ export class PrivacyService {
 
   dispose(): void {
     this.stopCore(); this.stopPreparation();
-    for (const adapter of this.cdpContexts.values()) adapter.dispose();
-    this.cdpContexts.clear(); this.cdpOutcomes.clear();
+    this.cdpContexts.dispose(); this.cdpOutcomes.clear();
     this.tokens.dispose(); this.privateModes.clear(); this.tabs.clear();
   }
 
@@ -160,9 +162,10 @@ export class PrivacyService {
       this.revision++;
       this.runtime.publish('privacy.changed', this.state(tab, tab.url, tab.id), { windowId: tab.windowId });
     });
-    try { await adapter.start(); this.cdpContexts.set(tab.id, adapter); }
+    try { await this.cdpContexts.prepare(tab.id, () => adapter); }
     catch (error) {
       adapter.dispose();
+      if (error instanceof BrowserError && error.code === 'CANCELLED') throw error;
       const outcomes = this.cdpOutcomes.get(tab.id) ?? new CoverageLedger();
       outcomes.update({ type: 'record', outcome: { identity: 'root:setup', context: 'window', applied: false, reason: error instanceof Error ? error.message : 'CDP准备失败' } });
       this.cdpOutcomes.set(tab.id, outcomes);
