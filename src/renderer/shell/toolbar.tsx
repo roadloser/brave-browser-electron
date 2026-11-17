@@ -4,6 +4,7 @@ import type { TabSnapshot } from '../../shared/contracts/browser-core';
 import { IconButton } from '../components/icon-button';
 import { AddressBar } from './address-bar';
 import { BrowserMenu } from './browser-menu';
+import { ProfileMenu } from './profile-menu';
 import { useBrowserCommand } from './use-browser-command';
 
 export function Toolbar({ tab, slots }: { tab: TabSnapshot | undefined; slots?: ReactNode }) {
@@ -24,6 +25,7 @@ export function Toolbar({ tab, slots }: { tab: TabSnapshot | undefined; slots?: 
         <Bookmark size={17} />
       </IconButton>
       {slots}
+      <ProfileMenu />
       <BrowserMenu />
     </div>
   );

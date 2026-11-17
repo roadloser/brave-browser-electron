@@ -19,7 +19,7 @@ export function logicalUrl(url: string): string {
   } catch { return 'about:blank'; }
 }
 
-export function normalizeNavigation(input: string): string {
+export function normalizeNavigation(input: string, searchEngine = 'brave'): string {
   const trimmed = input.trim();
   if (!trimmed) return 'brave://newtab';
   if (isInternalPage(trimmed)) return trimmed;
@@ -32,5 +32,6 @@ export function normalizeNavigation(input: string): string {
   if (/^(localhost|\[[\da-f:]+\]|[\w-]+(?:\.[\w-]+)+)(?::\d+)?(?:[/?#]|$)/i.test(trimmed)) {
     return new URL((trimmed.startsWith('localhost') ? 'http://' : 'https://') + trimmed).href;
   }
-  return 'https://search.brave.com/search?q=' + encodeURIComponent(trimmed);
+  const engines: Record<string, string> = { brave: 'https://search.brave.com/search?q=', google: 'https://www.google.com/search?q=', duckduckgo: 'https://duckduckgo.com/?q=', bing: 'https://www.bing.com/search?q=' };
+  return (engines[searchEngine] ?? engines.brave) + encodeURIComponent(trimmed);
 }

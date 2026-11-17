@@ -1,34 +1,42 @@
-.bookmarks-page { height: 100%; overflow: auto; color: var(--text-primary, #222); background: var(--surface, #fff); }
-.bookmarks-page > header { display: flex; align-items: center; gap: 12px; padding: 26px 32px; border-bottom: 1px solid var(--border, #e5e5ea); }
+.bookmarks-page { height: 100%; overflow: auto; color: var(--color-text, #222); background: var(--color-surface, #fff); }
+.bookmarks-page > header { display: flex; align-items: center; gap: 12px; padding: 26px 32px; border-bottom: 1px solid var(--color-border, #e5e5ea); }
 .bookmarks-page h1 { font-size: 23px; margin: 0 20px 0 0; }
 .bookmarks-page h2 { font-size: 17px; margin: 0 0 22px; }
-.bookmarks-page input, .bookmarks-page select { border: 1px solid var(--border, #dcdce3); border-radius: 8px; padding: 9px 12px; background: var(--surface, #fff); color: inherit; font: inherit; }
+.bookmarks-page input, .bookmarks-page select, .bookmark-dialog input, .bookmark-dialog select { border: 1px solid var(--color-border, #dcdce3); border-radius: 8px; padding: 9px 12px; background: var(--color-surface, #fff); color: inherit; font: inherit; }
 .bookmarks-page > header input { min-width: 160px; flex: 1; max-width: 480px; }
-.bookmarks-page button { cursor: pointer; border: 1px solid var(--border, #dfdfe5); border-radius: 8px; padding: 8px 12px; color: inherit; background: var(--surface, #fff); font: inherit; }
+.bookmarks-page button, .bookmark-dialog button { cursor: pointer; border: 1px solid var(--color-border, #dfdfe5); border-radius: 8px; padding: 8px 12px; color: inherit; background: var(--color-surface, #fff); font: inherit; }
 .bookmarks-page button:disabled { cursor: default; opacity: .45; }
-.bookmarks-page button:hover:not(:disabled) { background: var(--surface-hover, #f1f0f8); }
+.bookmarks-page button:hover:not(:disabled) { background: var(--color-hover, #f1f0f8); }
 .bookmark-browser { display: grid; grid-template-columns: 220px 1fr; min-height: 400px; }
-.bookmark-folders { padding: 20px 12px; border-right: 1px solid var(--border, #e5e5ea); }
+.bookmark-folders { padding: 20px 12px; border-right: 1px solid var(--color-border, #e5e5ea); }
 .bookmark-folders button { border: 0; display: block; text-align: left; width: 100%; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bookmark-folders button[aria-current] { background: var(--accent-soft, #ebe5ff); color: var(--accent, #5340b3); }
+.bookmark-folders button[aria-current] { background: var(--color-accent-soft, #ebe5ff); color: var(--color-accent, #5340b3); }
 .bookmark-browser main { min-width: 0; padding: 24px 32px; }
 .bookmark-list { padding: 0; margin: 0; list-style: none; }
-.bookmark-list li { display: flex; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border, #eeeef3); }
+.bookmark-list li { display: flex; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--color-border, #eeeef3); }
 .bookmark-list .bookmark-open { display: flex; align-items: center; gap: 12px; text-align: left; flex: 1; min-width: 0; border: 0; }
 .bookmark-open > span:last-child { min-width: 0; }
 .bookmark-open strong, .bookmark-open small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bookmark-open strong { font-weight: 500; }
-.bookmark-open small { margin-top: 5px; color: var(--text-secondary, #777); max-width: 50vw; }
-.bookmark-kind { font-size: 22px; color: var(--accent, #6250b6); }
+.bookmark-open small { margin-top: 5px; color: var(--color-muted, #777); max-width: 50vw; }
+.bookmark-kind { font-size: 22px; color: var(--color-accent, #6250b6); }
 .bookmark-actions { display: flex; gap: 4px; }
 .bookmark-actions button { border: 0; padding: 6px 8px; }
-.bookmark-empty { color: var(--text-secondary, #777); }
+.bookmark-empty { color: var(--color-muted, #777); }
 .bookmark-error { margin: 16px 32px; padding: 12px; border-radius: 8px; background: #fff0ec; color: #923824; }
 .bookmark-error button { margin-left: 12px; }
-.bookmark-dialog-backdrop { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; background: #1115; }
-.bookmark-dialog { width: min(440px, 90vw); padding: 24px; border-radius: 14px; background: var(--surface, #fff); box-shadow: 0 20px 80px #0003; }
+.bookmark-dialog { width: min(440px, 90vw); padding: 24px; border-radius: 14px; background: var(--color-surface, #fff); box-shadow: 0 20px 80px #0003; }
 .bookmark-dialog label { display: grid; gap: 8px; margin: 16px 0; }
 .bookmark-dialog footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
-.bookmark-dialog footer button:last-child { background: var(--accent, #6143cd); color: white; border-color: transparent; }
+.bookmark-dialog footer button:last-child { background: var(--color-accent, #6143cd); color: white; border-color: transparent; }
 .bookmark-dialog [role=alert] { color: #b3261e; }
+.bookmarks-bar { display: flex; align-items: center; gap: 4px; height: 32px; min-height: 32px; padding: 0 12px; overflow: hidden; border-bottom: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text); }
+.bookmarks-bar > button { display: inline-flex; align-items: center; gap: 5px; border: 0; padding: 4px 7px; border-radius: 5px; background: transparent; color: inherit; font: inherit; font-size: 12px; cursor: pointer; min-width: 30px; max-width: 180px; white-space: nowrap; }
+.bookmarks-bar > button:hover { background: var(--color-hover); }
+.bookmarks-bar > button > span { overflow: hidden; text-overflow: ellipsis; }
+.bookmarks-bar > button > svg { flex: none; }
+.bookmarks-bar-empty { color: var(--color-muted); font-size: 12px; }
+.bookmarks-bar-manage { margin-left: auto; flex: none; }
+.bookmark-folder-popup { padding: 0; list-style: none; }
+.bookmark-folder-popup button { display: flex; align-items: center; gap: 8px; text-align: left; width: 100%; margin-bottom: 4px; }
 @media (max-width: 800px) { .bookmark-browser { grid-template-columns: 170px 1fr; } .bookmark-browser main { padding: 20px 16px; } .bookmark-list li { flex-wrap: wrap; } .bookmarks-page > header { flex-wrap: wrap; padding: 20px; } }

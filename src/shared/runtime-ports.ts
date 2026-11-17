@@ -1,6 +1,7 @@
-import type { BrowserWindow, Session, WebContents } from 'electron';
-import type { BrowserContext, BrowserSnapshot, CoreEvent, BrowserLayout, TabSnapshot, WindowSnapshot } from './contracts/browser-core';
+import type { BrowserWindow, OnBeforeRequestListenerDetails, Session, WebContents } from 'electron';
+import type { BrowserContext, BrowserSnapshot, CoreEvent, BrowserLayout, ProfileSnapshot, TabSnapshot, WindowSnapshot } from './contracts/browser-core';
 import type { Dispose } from './contracts/envelope';
+import type { BrowserSettings } from './contracts/settings';
 
 export type SqlValue = string | number | bigint | null | Uint8Array;
 export type SqlParameters = readonly SqlValue[] | Record<string, SqlValue>;
@@ -16,8 +17,25 @@ export interface StorageHost {
   open(profileId: string): ProfileDatabase;
   migrate(profileId: string, migrations: readonly Migration[]): void;
   close(profileId?: string): void;
+  remove(profileId: string): void;
+}
+export type PageTarget = { tabId: string; navigationId: string; origin: string; frame?: { processId: number; routingId: number } };
+export interface PageScriptPort {
+  register(id: string, script: { world: 'isolated' | 'main'; source: (argumentsValue: unknown) => string }): Dispose;
+  execute<Result>(id: string, target: PageTarget, argumentsValue: unknown): Promise<Result>;
+}
+export interface SecretStorePort {
+  available(): boolean;
+  encrypt(plaintext: string): string;
+  decrypt(ciphertext: string): string;
+}
+export type RequestDecision = { cancel?: boolean; redirectURL?: string };
+export interface RequestHostPort {
+  attach(browserSession: Session, evaluate: (details: OnBeforeRequestListenerDetails) => RequestDecision | Promise<RequestDecision>, onError: (error: unknown) => void): Dispose;
 }
 export interface BrowserCorePort {
+  getProfiles(): ProfileSnapshot[];
+  configureProfile(profileId: string, settings: Pick<BrowserSettings, 'startup' | 'searchEngine' | 'verticalTabs'>): void;
   getState(windowId: string): BrowserSnapshot;
   getWindow(windowId: string): WindowSnapshot;
   getTab(tabId: string): TabSnapshot;
@@ -28,6 +46,9 @@ export interface BrowserCorePort {
   getContexts(): BrowserContext[];
   onEvent(listener: (event: CoreEvent) => void): Dispose;
   openWindow(options?: { profileId?: string; isPrivate?: boolean }): Promise<WindowSnapshot>;
+  createProfile(name: string): ProfileSnapshot;
+  renameProfile(profileId: string, name: string): ProfileSnapshot;
+  deleteProfile(profileId: string, confirmName: string): Promise<void>;
   closeWindow(windowId: string): void;
   openTab(options: { windowId: string; url?: string; active?: boolean; pinned?: boolean }): Promise<TabSnapshot>;
   selectTab(tabId: string): void;

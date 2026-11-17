@@ -33,6 +33,11 @@ button { -webkit-app-region: no-drag; }
 .content-viewport { flex: 1; min-height: 0; overflow: auto; position: relative; background: var(--color-surface); }
 .browser-sidebar { width: var(--sidebar-width); flex: 0 0 var(--sidebar-width); display: flex; flex-direction: column; align-items: center; gap: 9px; padding: 12px 0; border-left: 1px solid var(--color-border); background: var(--color-bg); }
 .sidebar-spacer { flex: 1; }
+.bookmarks-bar { display: flex; align-items: center; gap: 3px; height: 30px; min-height: 30px; padding: 0 9px; background: var(--color-bg); border-bottom: 1px solid var(--color-border); overflow: hidden; }
+.bookmark-bar-item { display: flex; align-items: center; gap: 6px; padding: 4px 8px; background: none; border: 0; border-radius: 5px; max-width: 170px; flex: 0 0 auto; font-size: 11px; }
+.bookmark-bar-item:hover { background: var(--color-hover); }
+.bookmark-bar-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bookmarks-bar-empty { color: var(--color-muted); font-size: 11px; }
 .split-controls { display: flex; align-items: center; gap: 8px; padding: 3px 12px; min-height: 29px; background: var(--color-surface-subtle); border-bottom: 1px solid var(--color-border); font-size: 11px; }
 .split-controls input { max-width: 160px; accent-color: var(--color-accent); }
 .split-controls .icon-button { margin-left: auto; height: 23px; }

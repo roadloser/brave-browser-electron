@@ -4,6 +4,7 @@ import { browserClient } from '../../../renderer/client/browser-client';
 import { useHistory } from './use-history';
 import { HistoryRow } from './history-row';
 import { HistoryClearDialog } from './history-clear-dialog';
+import { Modal } from '../../../renderer/components/modal';
 import './history.css';
 
 function timestamp(value: string, nextDay = false): number | undefined {
@@ -62,13 +63,14 @@ export function HistoryPage() {
     </main>
     {clearOpen && <HistoryClearDialog pending={history.pending} error={history.error} onClose={() => setClearOpen(false)}
       onClear={async start => { if (await history.clear({ from: start })) { setClearOpen(false); setSelected(new Set()); } }} />}
-    {deleteIds && <div className="history-dialog-backdrop"><section className="history-dialog" role="alertdialog" aria-modal="true" aria-labelledby="history-delete-title">
-      <h2 id="history-delete-title">删除 {deleteIds.length} 条记录？</h2><p>这些浏览记录将从当前资料中删除。</p>
+    {deleteIds && <Modal open title={`删除 ${deleteIds.length} 条记录？`} className="history-dialog"
+      onOpenChange={open => { if (!open && !history.pending) setDeleteIds(null); }}>
+      <p>这些浏览记录将从当前资料中删除。</p>
       {history.error && <p role="alert">{history.error}</p>}
       <footer><button disabled={history.pending} onClick={() => setDeleteIds(null)}>取消</button>
         <button disabled={history.pending} onClick={async () => {
           if (await history.remove(deleteIds)) { setDeleteIds(null); setSelected(new Set()); }
         }}>{history.pending ? '正在删除…' : '删除'}</button></footer>
-    </section></div>}
+    </Modal>}
   </section>;
 }

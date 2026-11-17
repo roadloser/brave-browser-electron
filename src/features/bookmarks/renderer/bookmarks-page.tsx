@@ -5,6 +5,7 @@ import { useBookmarks } from './use-bookmarks';
 import { BookmarkDialog, type BookmarkDraft } from './bookmark-dialog';
 import { BookmarkMoveDialog } from './bookmark-move-dialog';
 import { BookmarkFolderTree } from './bookmark-folder-tree';
+import { Modal } from '../../../renderer/components/modal';
 import './bookmarks.css';
 
 type Editor = { kind: BookmarkNode['kind']; node?: BookmarkNode } | null;
@@ -74,14 +75,14 @@ export function BookmarksPage() {
       onClose={() => setMoving(null)} onMove={async parentId => {
         if (await bookmarks.mutate('bookmarks.move', { id: moving.id, parentId, index: bookmarks.nodes.filter(node => node.parentId === parentId).length })) setMoving(null);
       }} />}
-    {deleting && <div className="bookmark-dialog-backdrop"><section className="bookmark-dialog" role="alertdialog" aria-modal="true" aria-labelledby="bookmark-delete-title">
-      <h2 id="bookmark-delete-title">删除“{deleting.title}”？</h2>
+    {deleting && <Modal open title={`删除“${deleting.title}”？`} className="bookmark-dialog"
+      onOpenChange={open => { if (!open && !bookmarks.pending) setDeleting(null); }}>
       <p>{deleting.kind === 'folder' ? '此文件夹及其中所有书签将被删除。' : '此书签将从当前资料中删除。'}</p>
       {bookmarks.error && <p role="alert">{bookmarks.error}</p>}
       <footer><button disabled={bookmarks.pending} onClick={() => setDeleting(null)}>取消</button>
         <button disabled={bookmarks.pending} onClick={async () => {
           if (await bookmarks.mutate('bookmarks.remove', { id: deleting.id })) setDeleting(null);
         }}>删除</button></footer>
-    </section></div>}
+    </Modal>}
   </section>;
 }

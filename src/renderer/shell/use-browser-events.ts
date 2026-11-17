@@ -9,6 +9,9 @@ export function useBrowserEvents() {
     const disposers: Array<() => void> = [];
     try {
       disposers.push(browserClient.on('browser.state', store.acceptSnapshot));
+      disposers.push(browserClient.on('browser.shortcut', (shortcut) => {
+        if (shortcut.action === 'focusAddress') window.dispatchEvent(new Event('brave:focus-address'));
+      }));
       disposers.push(browserClient.on('app.error', (error) => store.reportError(error.message)));
       browserClient.command('browser.getState', {})
         .then((snapshot) => { if (alive) store.acceptSnapshot(snapshot); })

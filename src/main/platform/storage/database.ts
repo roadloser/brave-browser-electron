@@ -1,7 +1,8 @@
 import Database from 'better-sqlite3';
+import { rmSync } from 'node:fs';
 import { BrowserError } from '../../../shared/errors';
 import type { Migration, ProfileDatabase, SqlParameters, StorageHost } from '../../../shared/runtime-ports';
-import { profileDatabasePath } from './profile-paths';
+import { profileDatabasePath, profilePath } from './profile-paths';
 import { runMigrations } from './migration-runner';
 
 class SqliteProfileDatabase implements ProfileDatabase {
@@ -37,11 +38,12 @@ class SqliteProfileDatabase implements ProfileDatabase {
 
 export class SqliteStorageHost implements StorageHost {
   private readonly connections = new Map<string, { native: Database.Database; port: ProfileDatabase }>();
+  constructor(private readonly userDataPath?: string) {}
 
   open(profileId: string): ProfileDatabase {
     const existing = this.connections.get(profileId);
     if (existing) return existing.port;
-    const native = new Database(profileDatabasePath(profileId), { timeout: 5000 });
+    const native = new Database(profileDatabasePath(profileId, this.userDataPath), { timeout: 5000 });
     try {
       native.pragma('journal_mode = WAL');
       native.pragma('foreign_keys = ON');
@@ -65,5 +67,11 @@ export class SqliteStorageHost implements StorageHost {
       connection.native.close();
       this.connections.delete(id);
     }
+  }
+
+  remove(profileId: string): void {
+    if (profileId === 'catalog') throw new BrowserError('FORBIDDEN', '不能删除资料目录数据库');
+    this.close(profileId);
+    rmSync(profilePath(profileId, this.userDataPath), { recursive: true, force: true });
   }
 }

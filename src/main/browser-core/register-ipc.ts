@@ -1,13 +1,18 @@
 import type { FeatureRuntime } from '../../shared/module-lifecycle';
 import { BrowserError } from '../../shared/errors';
+import { attachBrowserKeyboard } from './keyboard-controller';
 
 export function registerBrowserIpc(runtime: FeatureRuntime): () => void {
   const { router, core } = runtime;
+  const keyboard = new Map<number, () => void>();
   const assertTab = (tabId: string, windowId: string) => {
     if (core.getTab(tabId).windowId !== windowId) throw new BrowserError('FORBIDDEN', '不能操作其他窗口的标签');
   };
   const disposers = [
     router.handle('browser.getState', (_payload, context) => core.getState(context.windowId)),
+    router.handle('browser.createProfile', payload => core.createProfile(payload.name)),
+    router.handle('browser.renameProfile', payload => core.renameProfile(payload.profileId, payload.name)),
+    router.handle('browser.deleteProfile', payload => core.deleteProfile(payload.profileId, payload.confirmName)),
     router.handle('browser.openWindow', (payload, context) => core.openWindow({ ...payload, profileId: payload.profileId ?? context.profileId })),
     router.handle('browser.closeWindow', (_payload, context) => core.closeWindow(context.windowId)),
     router.handle('browser.openTab', (payload, context) => core.openTab({ ...payload, windowId: context.windowId })),
@@ -26,8 +31,19 @@ export function registerBrowserIpc(runtime: FeatureRuntime): () => void {
     router.handle('browser.setLayout', (payload, context) => core.setLayout(context.windowId, payload)),
     router.handle('browser.windowAction', (payload, context) => core.windowAction(context.windowId, payload.action)),
     core.onEvent(event => {
-      if (event.type === 'stateChanged') runtime.publish('browser.state', event.state, { windowId: event.windowId });
+      if (event.type === 'stateChanged') {
+        runtime.publish('browser.state', event.state, { windowId: event.windowId });
+        for (const window of event.state.windows) {
+          const contents = window.tabs.map(tab => core.getTabWebContents(tab.id));
+          for (const target of contents) {
+            if (!keyboard.has(target.id)) {
+              keyboard.set(target.id, attachBrowserKeyboard(runtime, window.id, target));
+              target.once('destroyed', () => keyboard.delete(target.id));
+            }
+          }
+        }
+      }
     }),
   ];
-  return () => { for (const dispose of disposers.reverse()) dispose(); };
+  return () => { for (const dispose of keyboard.values()) dispose(); keyboard.clear(); for (const dispose of disposers.reverse()) dispose(); };
 }

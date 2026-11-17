@@ -7,6 +7,7 @@ export class NavigationController {
   constructor(
     private readonly changed: (tab: TabRecord) => void,
     private readonly committed: (visit: NavigationCommitted) => void,
+    private readonly searchEngine: (profileId: string) => string,
   ) {}
 
   bind(tab: TabRecord): () => void {
@@ -71,7 +72,7 @@ export class NavigationController {
   }
 
   async navigate(tab: TabRecord, input: string): Promise<void> {
-    const url = normalizeNavigation(input);
+    const url = normalizeNavigation(input, this.searchEngine(tab.snapshot.profileId));
     tab.source = 'navigation';
     tab.snapshot.url = url;
     tab.snapshot.error = undefined;

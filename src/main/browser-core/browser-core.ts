@@ -1,5 +1,7 @@
 import type { BrowserContext, BrowserLayout, BrowserSnapshot, CoreEvent, TabSnapshot, WindowSnapshot } from '../../shared/contracts/browser-core';
 import type { BrowserCorePort, StorageHost } from '../../shared/runtime-ports';
+import type { BrowserSettings } from '../../shared/contracts/settings';
+import { session } from 'electron';
 import { BrowserError } from '../../shared/errors';
 import { ProfileManager } from './profile-manager';
 import { PageEventSource } from './page-event-source';
@@ -14,11 +16,12 @@ import type { SavedWindow, WindowRecord } from './core-state';
 
 export type BrowserCoreOptions = {
   storage: StorageHost; uiUrl: string; preloadPath: string;
+  onProfileReady?: (profileId: string) => void;
   onError?: (error: unknown) => void;
 };
 
 export class BrowserCore implements BrowserCorePort {
-  private readonly profiles = new ProfileManager();
+  private readonly profiles: ProfileManager;
   private readonly events = new PageEventSource();
   private readonly sessions = new SessionRegistry(this.events);
   private readonly windows: WindowManager;
@@ -30,12 +33,19 @@ export class BrowserCore implements BrowserCorePort {
   private revision = 0;
   private quitting = false;
   private restoring = false;
+  private readonly preferences = new Map<string, Pick<BrowserSettings, 'startup' | 'searchEngine' | 'verticalTabs'>>();
 
   constructor(private readonly options: BrowserCoreOptions) {
+    this.profiles = new ProfileManager(options.storage);
     this.repository = new RecoveryRepository(options.storage);
     this.windows = new WindowManager({
       ...options, onClosed: window => this.windowClosed(window),
       onChanged: window => this.changed(window),
+      onBeforeClose: window => {
+        if (this.quitting || !window.tabIds.length) return true;
+        for (const tabId of [...window.tabIds]) this.closeTab(tabId);
+        return false;
+      },
     });
     this.navigation = new NavigationController(
       tab => {
@@ -43,6 +53,7 @@ export class BrowserCore implements BrowserCorePort {
         if (window) this.changed(window);
       },
       visit => this.events.emit({ type: 'navigationCommitted', visit }),
+      profileId => this.preferences.get(profileId)?.searchEngine ?? 'brave',
     );
     this.tabs = new TabManager(this.sessions, this.navigation, window => this.changed(window),
       (windowId, url) => { void this.openTab({ windowId, url }).catch(error => this.reportError(error)); });
@@ -80,6 +91,17 @@ export class BrowserCore implements BrowserCorePort {
   getTabWebContents(tabId: string) { return this.tabs.get(tabId).view.webContents; }
   sessionForContext(context: BrowserContext) { return this.sessions.get(context); }
   getContexts() { return this.sessions.contexts(); }
+  getProfiles() { return this.profiles.list(); }
+  configureProfile(profileId: string, settings: Pick<BrowserSettings, 'startup' | 'searchEngine' | 'verticalTabs'>): void {
+    this.profiles.get(profileId);
+    this.preferences.set(profileId, { ...settings });
+    for (const window of this.windows.records.values()) {
+      if (window.context.profileId === profileId) {
+        window.layout.verticalTabs = settings.verticalTabs;
+        this.changed(window);
+      }
+    }
+  }
   onEvent(listener: (event: CoreEvent) => void) { return this.events.subscribe(listener); }
 
   async openWindow(options: { profileId?: string; isPrivate?: boolean } = {}): Promise<WindowSnapshot> {
@@ -90,15 +112,42 @@ export class BrowserCore implements BrowserCorePort {
   }
 
   closeWindow(windowId: string): void { this.windows.get(windowId).native.close(); }
+  createProfile(name: string) {
+    const profile = this.profiles.create(name);
+    this.options.onProfileReady?.(profile.id);
+    this.broadcast();
+    return profile;
+  }
+  renameProfile(profileId: string, name: string) {
+    const profile = this.profiles.rename(profileId, name);
+    this.broadcast();
+    return profile;
+  }
+  async deleteProfile(profileId: string, confirmName: string): Promise<void> {
+    const profile = this.profiles.get(profileId);
+    if (profile.isDefault) throw new BrowserError('FORBIDDEN', '不能删除默认资料');
+    if (profile.name !== confirmName) throw new BrowserError('INVALID_ARGUMENT', '请输入完整资料名称以确认删除');
+    if (this.sessions.contexts().some(context => context.profileId === profileId)) {
+      throw new BrowserError('CONFLICT', '请先关闭此资料的全部窗口');
+    }
+    const browserSession = session.fromPartition('persist:profile-' + profileId);
+    await browserSession.closeAllConnections();
+    await browserSession.clearStorageData();
+    await browserSession.clearCache();
+    this.options.storage.remove(profileId);
+    this.profiles.remove(profileId);
+    this.broadcast();
+  }
   async openTab(options: { windowId: string; url?: string; active?: boolean; pinned?: boolean }) {
     return this.tabs.create(this.windows.get(options.windowId), options);
   }
   selectTab(tabId: string): void { this.tabs.select(this.windowForTab(tabId), tabId); }
   closeTab(tabId: string): void {
     const window = this.windowForTab(tabId);
-    this.tabs.close(window, tabId);
-    this.events.emit({ type: 'tabClosed', context: window.context, windowId: window.id, tabId });
-    if (!window.tabIds.length) this.closeWindow(window.id);
+    this.tabs.requestClose(window, tabId, () => {
+      this.events.emit({ type: 'tabClosed', context: window.context, windowId: window.id, tabId });
+      if (!window.tabIds.length && !window.native.isDestroyed()) this.closeWindow(window.id);
+    });
   }
   navigate(tabId: string, input: string) { return this.navigation.navigate(this.tabs.get(tabId), input); }
   goBack(tabId: string): void {
@@ -137,10 +186,14 @@ export class BrowserCore implements BrowserCorePort {
     this.restoring = true;
     try {
       for (const profile of this.profiles.list()) {
+        this.options.onProfileReady?.(profile.id);
+        if (this.preferences.get(profile.id)?.startup === 'new-tab') continue;
         for (const saved of this.repository.read(profile.id)) {
           const window = await this.createWindow(profile.id, false, saved);
           for (const tab of saved.tabs) await this.tabs.create(window, { active: false }, tab);
           if (saved.activeTabId && window.tabIds.includes(saved.activeTabId)) window.activeTabId = saved.activeTabId;
+          window.layout.splitTabIds = saved.layout.splitTabIds.filter(tabId => window.tabIds.includes(tabId));
+          window.layout.sidebarTabId = saved.layout.sidebarTabId && window.tabIds.includes(saved.layout.sidebarTabId) ? saved.layout.sidebarTabId : null;
           if (!window.tabIds.length) await this.openTab({ windowId: window.id });
           this.changed(window);
         }
@@ -161,16 +214,24 @@ export class BrowserCore implements BrowserCorePort {
   }
 
   private async createWindow(profileId: string, isPrivate: boolean, saved?: SavedWindow) {
+    this.options.onProfileReady?.(profileId);
     const context = this.sessions.acquire(profileId, isPrivate);
-    try { return await this.windows.create(context, saved); }
+    try {
+      const window = await this.windows.create(context, saved);
+      window.layout.verticalTabs = this.preferences.get(profileId)?.verticalTabs ?? false;
+      return window;
+    }
     catch (error) { await this.sessions.release(context); throw error; }
   }
   private windowForTab(tabId: string) { return this.windows.get(this.tabs.get(tabId).snapshot.windowId); }
   private changed(window: WindowRecord): void {
     if (window.native.isDestroyed() || this.quitting) return;
-    this.revision += 1;
     this.layout?.apply(window);
     if (!this.restoring) this.recovery?.schedule();
+    this.broadcast();
+  }
+  private broadcast(): void {
+    this.revision += 1;
     for (const target of this.windows.records.values()) {
       if (target.native.isDestroyed()) continue;
       this.events.emit({ type: 'stateChanged', windowId: target.id, state: this.getState(target.id) });
@@ -185,6 +246,7 @@ export class BrowserCore implements BrowserCorePort {
     }
     this.tabs.forgetWindow(window.id);
     void this.sessions.release(window.context).catch(error => this.reportError(error));
+    if (!this.quitting) this.broadcast();
     if (!this.quitting && !this.restoring) this.recovery.schedule();
   }
   private reportError(error: unknown): void {

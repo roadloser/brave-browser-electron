@@ -6,6 +6,11 @@ import { registerBrowserIpc } from '../browser-core/register-ipc';
 import { SqliteStorageHost } from '../platform/storage/database';
 import { IpcRouter } from '../ipc/router';
 import { createEventPublisher } from '../ipc/event-publisher';
+import { mapError } from '../ipc/error-mapper';
+import { PageScriptHost } from '../platform/runtime/page-script-host';
+import { SecretStore } from '../platform/credentials/secret-store';
+import { NetworkPolicyCoordinator } from '../platform/network/request-policy';
+import { ElectronRequestHost } from '../platform/network/electron-request-host';
 import type { Dispose } from '../../shared/contracts/envelope';
 import type { FeatureRegistration, FeatureRuntime } from '../../shared/module-lifecycle';
 import { featureManifest } from './feature-manifest';
@@ -15,6 +20,7 @@ export class AppRuntime {
   private core?: BrowserCore;
   private storage?: SqliteStorageHost;
   private router?: IpcRouter;
+  private pages?: PageScriptHost;
   private features: FeatureRegistration[] = [];
   private subscriptions: Dispose[] = [];
   private disposed = false;
@@ -35,10 +41,19 @@ export class AppRuntime {
     const router = new IpcRouter(core, uiUrl);
     this.router = router;
     const publish = createEventPublisher(core);
-    const runtime: FeatureRuntime = { core, storage, router, publish };
+    const pages = new PageScriptHost(core);
+    this.pages = pages;
+    const policies = new NetworkPolicyCoordinator();
+    const runtime: FeatureRuntime = {
+      core, storage, router, publish, pages,
+      secrets: new SecretStore(), requests: new ElectronRequestHost(policies),
+    };
+    for (const profile of core.getProfiles()) storage.migrate(profile.id, migrationManifest);
     this.subscriptions.push(registerBrowserIpc(runtime));
     this.subscriptions.push(core.onEvent(event => {
+      if (event.type === 'sessionCreated') policies.select(core.sessionForContext(event.context), 'native-shields', 'D-003');
       if (event.type === 'stateChanged') publish('browser.state', event.state, { windowId: event.windowId });
+      if (event.type === 'shortcut') publish('browser.shortcut', { action: event.action }, { windowId: event.windowId });
     }));
     try {
       for (const definition of featureManifest) this.features.push(await definition.register(runtime));
@@ -70,6 +85,7 @@ export class AppRuntime {
     this.features = [];
     for (const dispose of this.subscriptions.reverse()) dispose();
     this.subscriptions = [];
+    this.pages?.dispose();
     try { await this.core?.dispose(); } catch (error) { errors.push(error); }
     this.router?.dispose();
     this.storage?.close();

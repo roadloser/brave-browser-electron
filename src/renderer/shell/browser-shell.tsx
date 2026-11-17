@@ -12,6 +12,7 @@ import { VerticalTabStrip } from './vertical-tab-strip';
 import { ContentViewport } from './content-viewport';
 import { Sidebar } from './sidebar';
 import { SplitControls } from './split-controls';
+import { useShellSettings } from './use-shell-settings';
 import '../styles/tokens.css';
 import '../styles/theme.css';
 import '../styles/shell.css';
@@ -20,15 +21,17 @@ export interface BrowserShellProps {
   renderPage: (url: string, context: { window: WindowSnapshot; tab: TabSnapshot }) => ReactNode;
   toolbarSlots?: ReactNode;
   sidebarSlots?: ReactNode;
+  bookmarksBarSlot?: ReactNode;
 }
 
-export function BrowserShell({ renderPage, toolbarSlots, sidebarSlots }: BrowserShellProps) {
+export function BrowserShell({ renderPage, toolbarSlots, sidebarSlots, bookmarksBarSlot }: BrowserShellProps) {
   useBrowserEvents();
   const snapshot = useBrowserStore((state) => state.snapshot);
   const error = useBrowserStore((state) => state.error);
   const currentWindow = snapshot?.windows.find((entry) => entry.id === snapshot.currentWindowId);
   const tab = currentWindow?.tabs.find((entry) => entry.id === currentWindow.activeTabId);
   const groups = useTabGroups(currentWindow?.id);
+  useShellSettings(currentWindow?.profileId);
   useBrowserShortcuts(currentWindow);
   if (!currentWindow) return (
     <div className="browser-loading">
@@ -46,6 +49,7 @@ export function BrowserShell({ renderPage, toolbarSlots, sidebarSlots }: Browser
         {currentWindow.isPrivate && <span className="private-badge"><VenetianMask size={16} />私密</span>}
       </header>
       <Toolbar tab={tab} slots={toolbarSlots} />
+      {bookmarksBarSlot}
       {error && <ErrorNotice message={error} onDismiss={() => useBrowserStore.getState().clearError()} />}
       <div className="browser-workspace">
         {currentWindow.layout.verticalTabs && <VerticalTabStrip currentWindow={currentWindow} groups={groups} />}

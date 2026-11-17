@@ -40,6 +40,7 @@ export type NavigationCommitted = BrowserContext & {
 };
 export type CoreEvent =
   | { type: 'stateChanged'; windowId: string; state: BrowserSnapshot }
+  | { type: 'shortcut'; windowId: string; action: 'focusAddress' }
   | { type: 'navigationCommitted'; visit: NavigationCommitted }
   | { type: 'tabClosed'; context: BrowserContext; windowId: string; tabId: string }
   | { type: 'sessionCreated'; context: BrowserContext }
@@ -49,6 +50,9 @@ const tabTarget = z.object({ tabId: idSchema });
 export const browserCommandSchemas = {
   'browser.getState': z.object({}),
   'browser.openWindow': z.object({ isPrivate: z.boolean().optional(), profileId: idSchema.optional() }),
+  'browser.createProfile': z.object({ name: z.string().trim().min(1).max(80) }),
+  'browser.renameProfile': z.object({ profileId: idSchema, name: z.string().trim().min(1).max(80) }),
+  'browser.deleteProfile': z.object({ profileId: idSchema, confirmName: z.string().min(1).max(80) }),
   'browser.closeWindow': z.object({}),
   'browser.openTab': z.object({ url: urlInputSchema.optional(), active: z.boolean().optional(), pinned: z.boolean().optional() }),
   'browser.selectTab': tabTarget,
@@ -69,6 +73,9 @@ export const browserCommandSchemas = {
 export interface BrowserCommandResults {
   'browser.getState': BrowserSnapshot;
   'browser.openWindow': WindowSnapshot;
+  'browser.createProfile': ProfileSnapshot;
+  'browser.renameProfile': ProfileSnapshot;
+  'browser.deleteProfile': void;
   'browser.closeWindow': void;
   'browser.openTab': TabSnapshot;
   'browser.selectTab': void;

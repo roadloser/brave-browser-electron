@@ -13,17 +13,22 @@ export function useHistory(filter: HistoryFilter) {
   const mounted = useRef(true);
   const mutating = useRef(false);
 
-  const load = useCallback(async (offset = 0) => {
+  const load = useCallback(async (offset = 0): Promise<void> => {
     const request = ++generation.current;
     setLoading(true);
     try {
       const result = await browserClient.command('history.query', { ...filter, offset, limit: 100 });
       if (!mounted.current || request !== generation.current) return;
-      setPage(previous => ({
-        ...result,
-        entries: offset > 0 && result.revision === previous.revision
-          ? [...previous.entries, ...result.entries] : result.entries,
-      }));
+      if (offset > 0) {
+        const fresh = await browserClient.command('history.query', { ...filter, offset: 0, limit: 100 });
+        if (!mounted.current || request !== generation.current) return;
+        if (fresh.revision !== result.revision) {
+          setPage(fresh);
+        } else {
+          setPage(previous => previous.revision === result.revision
+            ? { ...result, entries: [...previous.entries, ...result.entries] } : fresh);
+        }
+      } else setPage(result);
       setError('');
     } catch (problem) {
       if (mounted.current && request === generation.current) setError(problem instanceof Error ? problem.message : '历史读取失败');

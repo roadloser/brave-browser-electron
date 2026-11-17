@@ -9,15 +9,15 @@ export function applicationDataPath(): string {
   return path;
 }
 
-export function profilePath(profileId: string): string {
+export function profilePath(profileId: string, root = applicationDataPath()): string {
   if (!/^[a-zA-Z0-9_-]{1,128}$/.test(profileId)) {
     throw new BrowserError('INVALID_ARGUMENT', '资料标识不合法');
   }
-  const path = join(applicationDataPath(), 'profiles', profileId);
+  const path = join(root, 'profiles', profileId);
   mkdirSync(path, { recursive: true, mode: 0o700 });
   return path;
 }
 
-export function profileDatabasePath(profileId: string): string {
-  return join(profilePath(profileId), 'browser.sqlite');
+export function profileDatabasePath(profileId: string, root?: string): string {
+  return join(profilePath(profileId, root), 'browser.sqlite');
 }

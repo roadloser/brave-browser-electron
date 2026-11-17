@@ -32,6 +32,7 @@ export type CommandEnvelope = {
 export type CommandResult<Value> = { ok: true; value: Value } | { ok: false; error: WireError };
 export interface BrowserEvents {
   'browser.state': BrowserSnapshot;
+  'browser.shortcut': { action: 'focusAddress' };
   'tabGroups.changed': TabGroupsState;
   'bookmarks.changed': BookmarksState;
   'history.changed': { revision: number };

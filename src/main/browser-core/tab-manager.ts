@@ -1,11 +1,10 @@
-import { WebContentsView } from 'electron';
+import { dialog, WebContentsView } from 'electron';
 import { randomUUID } from 'node:crypto';
 import { BrowserError } from '../../shared/errors';
 import type { TabSnapshot } from '../../shared/contracts/browser-core';
 import type { SavedTab, TabRecord, WindowRecord } from './core-state';
 import { SessionRegistry } from './session-registry';
 import { NavigationController } from './navigation-controller';
-import { nativeUrl } from './internal-pages';
 
 export class TabManager {
   readonly records = new Map<string, TabRecord>();
@@ -44,6 +43,13 @@ export class TabManager {
       return { action: 'deny' };
     });
     view.webContents.on('will-attach-webview', event => event.preventDefault());
+    view.webContents.on('will-prevent-unload', event => {
+      const response = dialog.showMessageBoxSync(window.native, {
+        type: 'warning', title: '离开此页面？', message: '您所做的更改可能不会保存。',
+        buttons: ['留在此页', '离开'], defaultId: 0, cancelId: 0,
+      });
+      if (response === 1) event.preventDefault();
+    });
     if (options.active !== false || !window.activeTabId) window.activeTabId = snapshot.id;
     this.changed(window);
     try {
@@ -72,8 +78,9 @@ export class TabManager {
   }
 
   close(window: WindowRecord, tabId: string, remember = true): void {
-    const tab = this.get(tabId);
-    if (remember) {
+    const tab = this.records.get(tabId);
+    if (!tab) return;
+    if (remember && !tab.view.webContents.isDestroyed()) {
       const history = this.closed.get(window.id) ?? [];
       history.unshift(this.save(tabId));
       this.closed.set(window.id, history.slice(0, 25));
@@ -87,8 +94,24 @@ export class TabManager {
     tab.disposeEvents();
     if (!window.native.isDestroyed()) window.native.contentView.removeChildView(tab.view);
     this.records.delete(tabId);
-    tab.view.webContents.close({ waitForBeforeUnload: false });
+    if (!tab.view.webContents.isDestroyed()) tab.view.webContents.close({ waitForBeforeUnload: false });
     this.changed(window);
+  }
+
+  requestClose(window: WindowRecord, tabId: string, committed: () => void): void {
+    const tab = this.get(tabId);
+    const saved = this.save(tabId);
+    const contents = tab.view.webContents;
+    const closed = () => {
+      const history = this.closed.get(window.id) ?? [];
+      history.unshift(saved);
+      this.closed.set(window.id, history.slice(0, 25));
+      this.close(window, tabId, false);
+      committed();
+    };
+    contents.once('destroyed', closed);
+    contents.close({ waitForBeforeUnload: true });
+    setTimeout(() => { if (!contents.isDestroyed()) contents.removeListener('destroyed', closed); }, 30000);
   }
 
   move(window: WindowRecord, tabId: string, index: number): void {

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Modal } from '../../../renderer/components/modal';
 
 type Props = { pending: boolean; error: string; onClose: () => void; onClear: (from?: number) => Promise<void> };
 const periods = [
@@ -8,8 +9,8 @@ const periods = [
 
 export function HistoryClearDialog({ pending, error, onClose, onClear }: Props) {
   const [hours, setHours] = useState(1);
-  return <div className="history-dialog-backdrop"><section className="history-dialog" role="dialog" aria-modal="true" aria-labelledby="history-clear-title">
-    <h2 id="history-clear-title">清除浏览历史记录</h2>
+  return <Modal open title="清除浏览历史记录" className="history-dialog"
+    onOpenChange={open => { if (!open && !pending) onClose(); }}>
     <p>删除所选时间内当前资料的浏览记录。这不会删除书签、下载文件、Cookie 或已保存的密码。</p>
     <label>时间范围<select autoFocus value={hours} onChange={event => setHours(Number(event.target.value))}>
       {periods.map(period => <option key={period.hours} value={period.hours}>{period.label}</option>)}
@@ -17,5 +18,5 @@ export function HistoryClearDialog({ pending, error, onClose, onClear }: Props) 
     {error && <p role="alert">{error}</p>}
     <footer><button disabled={pending} onClick={onClose}>取消</button>
       <button disabled={pending} onClick={() => void onClear(hours ? Date.now() - hours * 3_600_000 : undefined)}>{pending ? '正在清除…' : '清除历史记录'}</button></footer>
-  </section></div>;
+  </Modal>;
 }

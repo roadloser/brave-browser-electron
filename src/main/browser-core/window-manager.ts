@@ -9,6 +9,7 @@ export type WindowManagerOptions = {
   preloadPath: string;
   onClosed: (window: WindowRecord) => void;
   onChanged: (window: WindowRecord) => void;
+  onBeforeClose: (window: WindowRecord) => boolean;
 };
 
 export class WindowManager {
@@ -38,7 +39,7 @@ export class WindowManager {
     const record: WindowRecord = {
       id: saved?.id ?? randomUUID(), context, native,
       tabIds: [], activeTabId: null,
-      layout: saved ? { ...saved.layout, contentVisible: true } : defaultLayout(),
+      layout: saved ? { ...saved.layout, contentVisible: true, splitTabIds: [], sidebarTabId: null } : defaultLayout(),
     };
     this.records.set(record.id, record);
     native.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -50,6 +51,7 @@ export class WindowManager {
       this.records.delete(record.id);
       this.options.onClosed(record);
     });
+    native.on('close', event => { if (!this.options.onBeforeClose(record)) event.preventDefault(); });
     try {
       await native.loadURL(this.options.uiUrl);
       if (saved?.maximized) native.maximize();

@@ -6,7 +6,7 @@ import { BrowserError } from '../../../shared/errors';
 import { TabGroupRepository } from './repository';
 import { contiguousOrder, normalizeGroups } from './group-order';
 
-type WindowGroups = { context: BrowserContext; groups: TabGroup[]; revision: number };
+type WindowGroups = { context: BrowserContext; groups: TabGroup[]; revision: number; activeTabId: string | null };
 
 export class TabGroupService {
   private readonly windows = new Map<string, WindowGroups>();
@@ -95,7 +95,7 @@ export class TabGroupService {
     const persisted = context.isPrivate ? [] : this.repository(context.profileId).list(window.id);
     const groups = normalizeGroups(persisted, window);
     this.revision = Math.max(this.revision, ...groups.map((group) => group.revision), 0);
-    const state = { context, groups, revision: this.revision };
+    const state = { context, groups, revision: this.revision, activeTabId: window.activeTabId };
     this.windows.set(window.id, state);
     return state;
   }
@@ -176,8 +176,10 @@ export class TabGroupService {
     for (const window of event.state.windows) {
       const state = this.windows.get(window.id);
       if (!state) continue;
+      const activeChanged = state.activeTabId !== window.activeTabId;
+      state.activeTabId = window.activeTabId;
       const groups = normalizeGroups(state.groups, window).map((group) =>
-        group.collapsed && window.activeTabId && group.tabIds.includes(window.activeTabId) ?
+        activeChanged && group.collapsed && window.activeTabId && group.tabIds.includes(window.activeTabId) ?
           { ...group, collapsed: false } : group);
       if (JSON.stringify(groups) === JSON.stringify(state.groups)) continue;
       try {

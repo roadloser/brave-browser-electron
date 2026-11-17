@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { BookmarkNode } from '../../../shared/contracts/bookmarks';
+import { Modal } from '../../../renderer/components/modal';
 
 type Props = {
   node: BookmarkNode; nodes: BookmarkNode[]; pending: boolean; error: string;
@@ -20,9 +21,8 @@ export function BookmarkMoveDialog({ node, nodes, pending, error, onMove, onClos
     }
   }
   const folders = nodes.filter(candidate => candidate.kind === 'folder' && !excluded.has(candidate.id));
-  return <div className="bookmark-dialog-backdrop">
-    <section className="bookmark-dialog" role="dialog" aria-modal="true" aria-labelledby="bookmark-move-title">
-      <h2 id="bookmark-move-title">移动“{node.title}”</h2>
+  return <Modal open title={`移动“${node.title}”`} className="bookmark-dialog"
+    onOpenChange={open => { if (!open && !pending) onClose(); }}>
       <form onSubmit={event => { event.preventDefault(); void onMove(parentId); }}>
         <label>目标文件夹<select autoFocus value={parentId} onChange={event => setParentId(event.target.value)}>
           {folders.map(folder => <option key={folder.id} value={folder.id}>{folder.title}</option>)}
@@ -31,6 +31,5 @@ export function BookmarkMoveDialog({ node, nodes, pending, error, onMove, onClos
         <footer><button type="button" disabled={pending} onClick={onClose}>取消</button>
           <button type="submit" disabled={pending}>{pending ? '移动中…' : '移动'}</button></footer>
       </form>
-    </section>
-  </div>;
+  </Modal>;
 }
