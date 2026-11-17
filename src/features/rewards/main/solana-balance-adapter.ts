@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { BrowserError } from '../../../shared/errors';
+import type { RewardsFetch } from './rewards-network';
 
 const BAT_MINT = 'EPeUFDgHRxs9xxEPVaL6kfGQvCon7jmAWKVUHuux1Tpz';
 const responseSchema = z.object({
@@ -13,15 +14,15 @@ const responseSchema = z.object({
 });
 
 export interface RewardsBalanceProviderPort {
-  fetch(endpoint: string, address: string, signal: AbortSignal): Promise<string>;
+  fetch(endpoint: string, address: string, signal: AbortSignal, request: RewardsFetch): Promise<string>;
 }
 
 export class SolanaBatBalanceAdapter implements RewardsBalanceProviderPort {
-  async fetch(endpoint: string, address: string, signal: AbortSignal): Promise<string> {
+  async fetch(endpoint: string, address: string, signal: AbortSignal, request: RewardsFetch): Promise<string> {
     if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address)) throw new BrowserError('INVALID_ARGUMENT', '服务返回的Solana收款地址无效');
     const url = new URL(endpoint);
     if (url.protocol !== 'https:' || url.username || url.password) throw new BrowserError('INVALID_ARGUMENT', 'Solana RPC必须使用有效HTTPS地址');
-    const response = await fetch(url, {
+    const response = await request(url, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, signal, redirect: 'error',
       body: JSON.stringify({ jsonrpc: '2.0', id: randomUUID(), method: 'getTokenAccountsByOwner', params: [
         address, { mint: BAT_MINT }, { encoding: 'jsonParsed', commitment: 'confirmed' },

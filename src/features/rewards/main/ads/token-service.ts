@@ -7,6 +7,7 @@ import type { RewardsStored } from '../rewards-repository';
 import type { AdsTokenCryptoPort, BlindedTokenBatch } from './crypto-port';
 import type { AdsTokenProviderPort } from './token-provider';
 import { AdsTokenRepository, type PendingTokenBatch } from './token-repository';
+import { contextAdsFetch } from './ads-fetch';
 
 export class AdsTokenService {
   private readonly running = new Map<string, AbortController>();
@@ -66,12 +67,13 @@ export class AdsTokenService {
         };
         repository.saveBatch(pending); this.notify(profileId);
         seed = Buffer.from(this.runtime.secrets.decrypt(reward.seedCipher), 'hex');
-        const nonce = await this.provider.request(configuration.endpoint, reward.paymentId, seed, batch.blindedTokens, controller.signal);
-        if (controller.signal.aborted) throw new BrowserError('CANCELLED', 'token请求已取消');
+        const nonce = await this.provider.request(configuration.endpoint, reward.paymentId, seed, batch.blindedTokens, controller.signal, contextAdsFetch(this.runtime, context));
+        if (this.disposed) throw new BrowserError('CANCELLED', 'token服务已关闭');
         pending = { ...pending, nonce, status: 'awaiting-signature', error: undefined };
         repository.saveBatch(pending); this.notify(profileId);
+        if (controller.signal.aborted) throw new BrowserError('CANCELLED', 'token请求已取消');
       }
-      const signed = await this.provider.fetch(configuration.endpoint, reward.paymentId, pending.nonce!, controller.signal);
+      const signed = await this.provider.fetch(configuration.endpoint, reward.paymentId, pending.nonce!, controller.signal, contextAdsFetch(this.runtime, context));
       if (!configuration.issuerPublicKeys.includes(signed.publicKey)) throw new BrowserError('FORBIDDEN', '签名响应的issuer不在独立可信公钥名单中，已拒绝token');
       const unblinded = this.crypto.verifyAndUnblind(batch, signed);
       if (controller.signal.aborted || this.disposed) throw new BrowserError('CANCELLED', 'token请求已取消');

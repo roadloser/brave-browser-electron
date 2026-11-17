@@ -10,6 +10,10 @@ export function registerRewardsIpc(runtime: FeatureRuntime, service: RewardsServ
     runtime.router.handle('rewards.connectSelfCustody', (_input, context) => service.connectSelfCustody(context)),
     runtime.router.handle('rewards.configureAds', (input, context) => service.configureAds(context, input.nonAnonymousEndpoint, input.issuerPublicKeys)),
     runtime.router.handle('rewards.refillConfirmationTokens', (_input, context) => service.refillConfirmationTokens(context)),
+    runtime.router.handle('rewards.configureAdsDelivery', (input, context) => service.adsDelivery.configure(context, input.enabled, input.maxPerHour)),
+    runtime.router.handle('rewards.refreshAds', (_input, context) => service.adsDelivery.refresh(context)),
+    runtime.router.handle('rewards.retryAdsConfirmations', (_input, context) => service.adsDelivery.retry(context)),
+    runtime.router.handle('rewards.redeemPaymentTokens', (_input, context) => service.adsDelivery.redeem(context)),
     runtime.router.handle('rewards.cancel', (_input, context) => service.cancel(context)),
   ];
   return () => releases.reverse().forEach(release => release());

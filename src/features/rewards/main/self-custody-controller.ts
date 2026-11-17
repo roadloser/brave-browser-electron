@@ -2,9 +2,10 @@ import type { CommandContext, FeatureRuntime } from '../../../shared/module-life
 import type { RewardsProviderPort, RewardsWalletStatus } from './provider-port';
 import type { RewardsStored } from './rewards-repository';
 import { BrowserError } from '../../../shared/errors';
+import { contextRewardsFetch } from './rewards-network';
 
 export class SelfCustodyController {
-  private readonly sessions = new Map<string, { controller: AbortController; timer?: ReturnType<typeof setTimeout>; deadline: number }>();
+  private readonly sessions = new Map<string, { controller: AbortController; context: CommandContext; timer?: ReturnType<typeof setTimeout>; deadline: number }>();
   constructor(private readonly runtime: FeatureRuntime, private readonly provider: RewardsProviderPort,
     private readonly read: (profileId: string) => RewardsStored,
     private readonly update: (profileId: string, status: RewardsWalletStatus) => void,
@@ -15,13 +16,14 @@ export class SelfCustodyController {
     const record = this.read(context.profileId);
     if (!record.paymentId || !record.availableSelfCustody?.solana) throw new BrowserError('UNAVAILABLE', '当前Rewards服务尚未确认Solana自托管收款资格，请先刷新账户状态');
     const controller = new AbortController();
-    const operation = { controller, deadline: Date.now() + 5 * 60_000, timer: undefined as ReturnType<typeof setTimeout> | undefined };
+    const operation = { controller, context, deadline: Date.now() + 5 * 60_000, timer: undefined as ReturnType<typeof setTimeout> | undefined };
     this.sessions.set(context.profileId, operation);
     const timeout = setTimeout(() => controller.abort(), 30_000);
     try {
       const challenge = await this.provider.selfCustodyChallenge({
         grantEndpoint: record.endpoint,
         serviceKey: record.serviceKeyCipher ? this.runtime.secrets.decrypt(record.serviceKeyCipher) : undefined,
+        fetch: contextRewardsFetch(this.runtime, context),
       }, seed, record.paymentId, controller.signal);
       if (controller.signal.aborted) throw new BrowserError('CANCELLED', '收款连接已取消');
       await this.runtime.core.sessionForContext(context).cookies.set({
@@ -55,6 +57,7 @@ export class SelfCustodyController {
       try {
         status = await this.provider.wallet({
           grantEndpoint: record.endpoint, serviceKey: record.serviceKeyCipher ? this.runtime.secrets.decrypt(record.serviceKeyCipher) : undefined,
+          fetch: contextRewardsFetch(this.runtime, operation.context),
         }, seed, record.paymentId, operation.controller.signal);
       } finally { clearTimeout(timeout); }
       if (operation.controller.signal.aborted || this.sessions.get(profileId) !== operation) return;
