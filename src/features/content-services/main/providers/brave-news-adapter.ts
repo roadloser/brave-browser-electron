@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { BrowserError } from '../../../../shared/errors';
-import type { NewsProviderPort, ScoredArticle, ScopedPublisher } from './provider';
+import type { ContentFetch, NewsProviderPort, ScoredArticle, ScopedPublisher } from './provider';
 import { fetchText } from './fetch-text';
 
 const publisherSchema = z.object({
@@ -20,8 +20,8 @@ export class BraveNewsAdapter implements NewsProviderPort {
   readonly version = 'sources-global/combined-feed-v1';
   private readonly origin = 'https://brave-today-cdn.brave.com';
 
-  async catalog(signal: AbortSignal): Promise<ScopedPublisher[]> {
-    const response = await fetchText(`${this.origin}/sources.global.json`, signal);
+  async catalog(signal: AbortSignal, fetch: ContentFetch): Promise<ScopedPublisher[]> {
+    const response = await fetchText(fetch, `${this.origin}/sources.global.json`, signal);
     const data: unknown = JSON.parse(response.text);
     if (!Array.isArray(data)) throw new BrowserError('UNAVAILABLE', '官方新闻来源格式已变更');
     const publishers: ScopedPublisher[] = [];
@@ -41,9 +41,9 @@ export class BraveNewsAdapter implements NewsProviderPort {
     return publishers;
   }
 
-  async articles(locale: string, signal: AbortSignal) {
+  async articles(locale: string, signal: AbortSignal, fetch: ContentFetch) {
     const nativeLocale = locale.replace('-', '_');
-    const response = await fetchText(`${this.origin}/brave-today/feed.${nativeLocale}json`, signal, 16 * 1024 * 1024);
+    const response = await fetchText(fetch, `${this.origin}/brave-today/feed.${nativeLocale}json`, signal, 16 * 1024 * 1024);
     const data: unknown = JSON.parse(response.text);
     if (!Array.isArray(data)) throw new BrowserError('UNAVAILABLE', '官方新闻内容格式已变更');
     const seen = new Set<string>();

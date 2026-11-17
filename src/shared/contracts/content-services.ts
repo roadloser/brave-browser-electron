@@ -8,12 +8,19 @@ export type NewsArticle = {
   description: string; imageUrl?: string; publishedAt: number;
 };
 export type DirectNewsFeed = { id: string; title: string; url: string; siteUrl?: string; error?: string };
+export type NewsFeedElement = { kind: 'hero' | 'article'; articleId: string; discover: boolean };
+export type NewsFeedItem =
+  | { id: string; kind: 'hero' | 'article'; articleId: string; discover: boolean }
+  | { id: string; kind: 'cluster'; clusterType: 'channel' | 'topic'; title: string; elements: NewsFeedElement[] }
+  | { id: string; kind: 'discover'; publisherIds: string[] };
 export type NewsState = {
   enabled: boolean; locale: string; publishers: NewsPublisher[];
   enabledPublisherIds: string[]; disabledPublisherIds: string[];
   channels: NewsChannel[]; directFeeds: DirectNewsFeed[]; articles: NewsArticle[];
   lastUpdated: number | null; status: 'idle' | 'loading' | 'ready' | 'failed' | 'cancelled';
   error?: string; revision: number;
+  feed: NewsFeedItem[];
+  topicsStatus?: 'idle' | 'ready' | 'failed'; topicsError?: string; recommendationsError?: string;
 };
 export const contentServicesCommandSchemas = {
   'news.get': z.object({}),

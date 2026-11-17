@@ -1,19 +1,32 @@
 import type { NewsState } from '../../../shared/contracts/content-services';
 import type { Migration, ProfileDatabase } from '../../../shared/runtime-ports';
 import type { ScoredArticle, ScopedPublisher } from './providers/provider';
+import type { NewsTopic, SimilarityMatrix } from './providers/topics-provider';
 
 export type NewsDocument = {
   state: NewsState; catalog: ScopedPublisher[]; candidates: ScoredArticle[];
+  topics: NewsTopic[]; similarities: SimilarityMatrix; enrichmentLocale?: string;
 };
 export const contentMigrations: readonly Migration[] = [{
   id: 'content-services', version: 1,
   up(database) { database.exec('CREATE TABLE IF NOT EXISTS news_document (id INTEGER PRIMARY KEY CHECK (id = 1), document TEXT NOT NULL)'); },
+}, {
+  id: 'content-services', version: 2,
+  up(database) {
+    const row = database.get<{ document: string }>('SELECT document FROM news_document WHERE id = 1');
+    if (!row) return;
+    const document = JSON.parse(row.document) as NewsDocument;
+    document.topics ??= []; document.similarities ??= {};
+    document.state.feed ??= document.state.articles.map((article) => ({ id: article.id, kind: 'article', articleId: article.id, discover: false }));
+    document.state.topicsStatus ??= 'idle';
+    database.run('UPDATE news_document SET document = ? WHERE id = 1', [JSON.stringify(document)]);
+  },
 }];
 export function defaultNewsDocument(): NewsDocument {
   return {
     state: { enabled: false, locale: 'en-US', publishers: [], enabledPublisherIds: [], disabledPublisherIds: [],
-      channels: [], directFeeds: [], articles: [], lastUpdated: null, status: 'idle', revision: 0 },
-    catalog: [], candidates: [],
+      channels: [], directFeeds: [], articles: [], feed: [], topicsStatus: 'idle', lastUpdated: null, status: 'idle', revision: 0 },
+    catalog: [], candidates: [], topics: [], similarities: {},
   };
 }
 export class NewsRepository {

@@ -8,6 +8,7 @@ import type { DirectFeedProviderPort, NewsProviderPort } from './providers/provi
 import { BraveNewsAdapter } from './providers/brave-news-adapter';
 import { RssFeedAdapter } from './providers/rss-feed-adapter';
 import { selectArticles } from './news-selection';
+import { NewsEnrichment } from './news-enrichment';
 
 export class NewsService {
   private readonly documents = new Map<string, NewsDocument>();
@@ -15,6 +16,7 @@ export class NewsService {
   private readonly feedOperations = new Map<string, Set<AbortController>>();
   private readonly provider: NewsProviderPort = new BraveNewsAdapter();
   private readonly direct: DirectFeedProviderPort = new RssFeedAdapter();
+  private readonly enrichment = new NewsEnrichment();
   private readonly release: () => void;
   constructor(private readonly runtime: FeatureRuntime) {
     this.release = runtime.core.onEvent((event) => {
@@ -34,6 +36,8 @@ export class NewsService {
     return this.commit(context, (document) => {
       document.state.locale = locale; document.state.lastUpdated = null;
       document.state.channels = [];
+      document.topics = []; document.similarities = {}; document.enrichmentLocale = undefined;
+      document.state.topicsStatus = 'idle'; document.state.topicsError = undefined; document.state.recommendationsError = undefined;
     });
   }
   setPublisher(context: CommandContext, id: string, enabled: boolean) {
@@ -42,14 +46,14 @@ export class NewsService {
       document.state.enabledPublisherIds = document.state.enabledPublisherIds.filter((entry) => entry !== id);
       document.state.disabledPublisherIds = document.state.disabledPublisherIds.filter((entry) => entry !== id);
       (enabled ? document.state.enabledPublisherIds : document.state.disabledPublisherIds).push(id);
-      selectArticles(document);
+      selectArticles(document, this.recentUrls(context));
     });
   }
   setChannel(context: CommandContext, id: string, enabled: boolean) {
     return this.commit(context, (document) => {
       const channel = document.state.channels.find((entry) => entry.id === id);
       if (!channel) throw new BrowserError('NOT_FOUND', '新闻频道已不存在');
-      channel.enabled = enabled; selectArticles(document);
+      channel.enabled = enabled; selectArticles(document, this.recentUrls(context));
     });
   }
   cancel(context: CommandContext) {
@@ -69,29 +73,38 @@ export class NewsService {
     this.operations.set(key, controller);
     this.commit(context, (document) => { document.state.status = 'loading'; document.state.error = undefined; });
     const timeout = setTimeout(() => controller.abort(), 30000);
+    const fetch = (url: string, init?: RequestInit) => this.runtime.network.fetch(context, url, { ...init, purpose: 'news' });
     try {
-      const catalogResult = await this.provider.catalog(controller.signal).then((catalog) => ({ catalog, error: '' }))
+      const catalogResult = await this.provider.catalog(controller.signal, fetch).then((catalog) => ({ catalog, error: '' }))
         .catch((error) => ({ catalog: prior.catalog, error: error instanceof Error ? error.message : '新闻来源下载失败' }));
       const locale = prior.state.locale.replace('-', '_');
+      const enrichmentPromise = this.enrichment.load(locale, catalogResult.catalog, prior, fetch, controller.signal);
       const locales = new Set([locale]);
       for (const publisher of catalogResult.catalog) {
         if (!prior.state.enabledPublisherIds.includes(publisher.id) || publisher.locales.some((entry) => locales.has(entry.locale))) continue;
         if (publisher.locales[0]) locales.add(publisher.locales[0].locale);
       }
       const combined = await Promise.all([...locales].map(async (entry) => {
-        try { return { articles: (await this.provider.articles(entry, controller.signal)).articles, error: '' }; }
+        try { return { articles: (await this.provider.articles(entry, controller.signal, fetch)).articles, error: '' }; }
         catch (error) { return { articles: [], error: error instanceof Error ? error.message : '新闻下载失败' }; }
       }));
       const direct = await Promise.all(prior.state.directFeeds.map(async (feed) => {
-        try { return { ...(await this.direct.read(feed.url, feed.id, controller.signal)), error: '' }; }
+        try { return { ...(await this.direct.read(feed.url, feed.id, controller.signal, fetch)), error: '' }; }
         catch (error) { return { feed, articles: [], error: error instanceof Error ? error.message : '订阅源读取失败' }; }
       }));
+      const enrichment = await enrichmentPromise;
       if (!this.documents.has(key)) throw new BrowserError('CANCELLED', '资料上下文已关闭');
       if (controller.signal.aborted || this.operations.get(key) !== controller) return this.get(context);
       const anySuccess = combined.some((result) => !result.error) || direct.some((result) => !result.error);
       const errors = [catalogResult.error, ...combined.map((result) => result.error), ...direct.map((result) => result.error)].filter(Boolean);
       return this.commit(context, (document) => {
         document.catalog = catalogResult.catalog;
+        document.topics = enrichment.topics.data;
+        document.similarities = enrichment.recommendations.data;
+        document.enrichmentLocale = enrichment.locale;
+        document.state.topicsStatus = enrichment.topics.error ? 'failed' : 'ready';
+        document.state.topicsError = enrichment.topics.error;
+        document.state.recommendationsError = enrichment.recommendations.error;
         document.state.publishers = catalogResult.catalog.map(({ defaultEnabled: _default, locales: _locales, ...publisher }) => publisher);
         const selected = new Map(document.state.channels.map((channel) => [channel.id, channel.enabled]));
         const channels = [...new Set(catalogResult.catalog.flatMap((publisher) => publisher.locales.filter((entry) => entry.locale === locale).flatMap((entry) => entry.channels)))];
@@ -103,7 +116,7 @@ export class NewsService {
           const retainedCombined = combined.some((result) => result.error) ? document.candidates.filter((article) => !directIds.has(article.publisherId)) : [];
           const retainedDirect = direct.filter((result) => result.error).flatMap((result) => document.candidates.filter((article) => article.publisherId === result.feed.id));
           document.candidates = [...combinedArticles, ...retainedCombined, ...direct.flatMap((result) => result.articles), ...retainedDirect];
-          selectArticles(document);
+          selectArticles(document, this.recentUrls(context));
           document.state.lastUpdated = Date.now();
         }
         document.state.status = anySuccess ? 'ready' : 'failed';
@@ -129,12 +142,12 @@ export class NewsService {
     pending.add(controller); this.feedOperations.set(contextKey, pending);
     const timeout = setTimeout(() => controller.abort(), 20000);
     try {
-      const result = await this.direct.read(normalized, id, controller.signal);
+      const result = await this.direct.read(normalized, id, controller.signal, (url, init) => this.runtime.network.fetch(context, url, { ...init, purpose: 'news' }));
       if (controller.signal.aborted) throw new BrowserError('CANCELLED', '添加订阅已取消');
       return this.commit(context, (document) => {
         document.state.directFeeds = [...document.state.directFeeds.filter((feed) => feed.id !== id), result.feed];
         document.candidates = [...document.candidates.filter((article) => article.publisherId !== id), ...result.articles];
-        selectArticles(document);
+        selectArticles(document, this.recentUrls(context));
       });
     } finally {
       clearTimeout(timeout); pending.delete(controller);
@@ -145,7 +158,7 @@ export class NewsService {
     this.cancel(context);
     return this.commit(context, (document) => {
       document.state.directFeeds = document.state.directFeeds.filter((feed) => feed.id !== id);
-      document.candidates = document.candidates.filter((article) => article.publisherId !== id); selectArticles(document);
+      document.candidates = document.candidates.filter((article) => article.publisherId !== id); selectArticles(document, this.recentUrls(context));
     });
   }
   dispose() {
@@ -155,6 +168,9 @@ export class NewsService {
     this.operations.clear(); this.documents.clear();
   }
   private key(context: BrowserContext) { return context.isPrivate ? `private:${context.contextId}` : `profile:${context.profileId}`; }
+  private recentUrls(context: BrowserContext) {
+    return this.runtime.historyRead.recentUrls(context, { since: Date.now() - 14 * 24 * 60 * 60 * 1000, limit: 2000 });
+  }
   private load(context: CommandContext) {
     const key = this.key(context);
     const existing = this.documents.get(key);

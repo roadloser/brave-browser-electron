@@ -1,10 +1,13 @@
 import type { NewsDocument } from './news-repository';
-import { BraveRankingAdapter } from './providers/brave-ranking-adapter';
-import type { NewsRankingPort } from './providers/ranking-provider';
+import { BraveFeedAdapter } from './providers/brave-feed-adapter';
+import type { NewsFeedPort } from './providers/news-feed-provider';
 
-const ranking: NewsRankingPort = new BraveRankingAdapter();
+const feedAdapter: NewsFeedPort = new BraveFeedAdapter();
 export function selectArticles(document: NewsDocument, recentUrls: string[] = []) {
-  document.state.articles = ranking.rank({
+  const result = feedAdapter.generate({
     articles: document.candidates, publishers: document.catalog, subscriptions: document.state, recentUrls, now: Date.now(),
-  }).map(({ channels: _channels, score: _score, popScore: _popScore, ...article }) => article);
+    topics: document.topics, similarities: document.similarities,
+  });
+  document.state.articles = result.articles;
+  document.state.feed = result.feed;
 }

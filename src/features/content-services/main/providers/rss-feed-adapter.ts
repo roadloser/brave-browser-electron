@@ -1,13 +1,13 @@
 import { createHash } from 'node:crypto';
 import Parser from 'rss-parser';
-import type { DirectFeedProviderPort, ScoredArticle } from './provider';
+import type { ContentFetch, DirectFeedProviderPort, ScoredArticle } from './provider';
 import { fetchText } from './fetch-text';
 
 export class RssFeedAdapter implements DirectFeedProviderPort {
   readonly implementation = 'rss-parser-3.13.0';
   private readonly parser = new Parser();
-  async read(url: string, id: string, signal: AbortSignal) {
-    const response = await fetchText(url, signal, 5 * 1024 * 1024);
+  async read(url: string, id: string, signal: AbortSignal, fetch: ContentFetch) {
+    const response = await fetchText(fetch, url, signal, 5 * 1024 * 1024);
     const parsed = await this.parser.parseString(response.text);
     const title = parsed.title?.trim() || new URL(url).hostname;
     const seen = new Set<string>();
